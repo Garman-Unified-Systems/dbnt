@@ -130,3 +130,11 @@ dbnt score
 - New features need tests
 - Core protocol changes require discussion in an issue first
 - Adapter PRs are welcome without prior discussion
+
+## Subscribed Topics
+
+Learnings tagged with these topics flow into ./LEARNINGS_INBOX.md daily via the diffuser
+(`~/.autonomous/diffuser/diffuse.py`). Edit this list to change what surfaces.
+
+- hooks  <!-- matched 'hook' in git log -->
+- ollama  <!-- matched 'ollama' in git log -->

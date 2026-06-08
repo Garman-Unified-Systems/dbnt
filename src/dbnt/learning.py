@@ -225,7 +225,7 @@ class LearningStore:
              datetime.now(timezone.utc).isoformat(), session_id),
         )
         self.conn.commit()
-        return cursor.lastrowid  # type: ignore[return-value]
+        return cursor.lastrowid or -1
 
     def get_unpromoted(self, domain: str | None = None) -> list[dict]:
         """Get learnings not yet promoted to rules."""
