@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-07-02
+### Fixed
+- `lastrowid` null-safety in `LearningStore.add()` — returns `-1` instead of `None` on insert failure
+### Changed
+- Classifier promoted from `Development Status :: 3 - Alpha` to `4 - Beta`
+
 ## [0.5.2] - 2026-03-20
 ### Added
 - `--limit` flag on `dbnt patterns` and `dbnt promote` (default 200) to cap SequenceMatcher comparisons

@@ -25,7 +25,7 @@ from dbnt.learning import DecayEngine, DecayState, LearningStore, PatternDetecto
 from dbnt.protocol import Action, Command, Protocol, ProtocolResponse
 from dbnt.signals.detector import Signal, SignalStrength, SignalType, detect_signal
 
-__version__ = "0.5.2"
+__version__ = "0.5.3"
 __all__ = [
     # Core
     "encode_success",
