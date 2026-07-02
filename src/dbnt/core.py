@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 
 class RuleType(Enum):
@@ -45,7 +46,7 @@ class Rule:
     created: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     source_session: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "type": self.type.value,

@@ -64,7 +64,7 @@ def parse_rule_file(path: Path) -> Rule | None:
 
 def load_rules_from_dir(directory: Path) -> list[Rule]:
     """Load all rule files from a directory."""
-    rules = []
+    rules: list[Rule] = []
     if not directory.exists():
         return rules
     for path in sorted(directory.glob("*.md")):

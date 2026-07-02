@@ -14,7 +14,7 @@ from dbnt.signals import detect_signal
 
 @click.group()
 @click.version_option()
-def main():
+def main() -> None:
     """DBNT — Do Better Next Time
 
     Universal learning protocol for AI systems.
@@ -27,7 +27,7 @@ def main():
 
 @main.command()
 @click.argument("text")
-def process(text: str):
+def process(text: str) -> None:
     """Process text through the DBNT protocol.
 
     Detects DB/DBN/DBNM/DBYC commands and positive/negative signals.
@@ -52,7 +52,7 @@ def process(text: str):
 
 
 @main.command()
-def score():
+def score() -> None:
     """Show current protocol score and history."""
     protocol = Protocol()
     state = protocol.state
@@ -71,7 +71,7 @@ def score():
 
 @main.command()
 @click.argument("text")
-def detect(text: str):
+def detect(text: str) -> None:
     """Detect signal type from text.
 
     Example: dbnt detect "that's perfect"
@@ -95,7 +95,7 @@ def detect(text: str):
     required=True,
 )
 @click.option("--context", "-x", default="", help="Why it worked")
-def success(pattern: str, category: str, context: str):
+def success(pattern: str, category: str, context: str) -> None:
     """Encode a success pattern.
 
     Example: dbnt success "Used dataclass for config" -c code -x "Clean and typed"
@@ -116,7 +116,7 @@ def success(pattern: str, category: str, context: str):
     required=True,
 )
 @click.option("--context", "-x", default="", help="Why it failed")
-def failure(pattern: str, category: str, context: str):
+def failure(pattern: str, category: str, context: str) -> None:
     """Encode a failure pattern.
 
     Example: dbnt failure "Used npm instead of bun" -c protocol -x "Project requires bun"
@@ -136,7 +136,7 @@ def failure(pattern: str, category: str, context: str):
 @click.option("--domain", "-d", default="general", help="Learning domain")
 @click.option("--importance", "-i", default=1.0, type=float, help="Importance (0-10)")
 @click.option("--source", "-s", default="cli", help="Source identifier")
-def learn(text: str, domain: str, importance: float, source: str):
+def learn(text: str, domain: str, importance: float, source: str) -> None:
     """Record a learning for pattern detection.
 
     Example: dbnt learn "Always use timezone-aware datetimes" -d code -i 3
@@ -150,7 +150,7 @@ def learn(text: str, domain: str, importance: float, source: str):
 @click.option("--domain", "-d", default=None, help="Filter by domain")
 @click.option("--threshold", "-t", default=0.7, type=float, help="Similarity threshold")
 @click.option("--limit", "-l", default=200, type=int, help="Max learnings to scan (default 200)")
-def patterns(domain: str | None, threshold: float, limit: int):
+def patterns(domain: str | None, threshold: float, limit: int) -> None:
     """Detect recurring patterns in learnings.
 
     Groups similar learnings and shows which are ready for promotion to rules.
@@ -186,7 +186,7 @@ def patterns(domain: str | None, threshold: float, limit: int):
 @main.command()
 @click.option("--domain", "-d", default=None, help="Filter by domain")
 @click.option("--limit", "-l", default=200, type=int, help="Max learnings to scan (default 200)")
-def promote(domain: str | None, limit: int):
+def promote(domain: str | None, limit: int) -> None:
     """Auto-promote recurring patterns to rules.
 
     Patterns with 3+ occurrences become rules automatically.
@@ -237,7 +237,7 @@ def promote(domain: str | None, limit: int):
 
 
 @main.command()
-def sweep():
+def sweep() -> None:
     """Run decay sweep — check all rules for staleness.
 
     Shows which rules are healthy, need review, or should be archived.
@@ -277,7 +277,7 @@ def sweep():
 # ─── Dissonance & Status ──────────────────────────────────────────────────
 
 @main.command()
-def dissonance():
+def dissonance() -> None:
     """Check learning dissonance (success/failure balance)."""
     result = check_dissonance()
 
@@ -296,7 +296,7 @@ def dissonance():
 
 
 @main.command()
-def status():
+def status() -> None:
     """Show full DBNT status."""
     # Protocol score
     protocol = Protocol()
@@ -330,7 +330,7 @@ def status():
 # ─── Rule Inspection ───────────────────────────────────────────────────────
 
 @main.command("rules")
-def rules_cmd():
+def rules_cmd() -> None:
     """List all encoded rules with decay status summary.
 
     Shows success and failure rules with category, preview, and health.
@@ -391,7 +391,7 @@ def rules_cmd():
 
 @main.command("show")
 @click.argument("rule_id")
-def show_cmd(rule_id: str):
+def show_cmd(rule_id: str) -> None:
     """Show full content of a specific rule by ID.
 
     Searches both successes/ and failures/ directories.
@@ -445,7 +445,7 @@ def show_cmd(rule_id: str):
     type=click.Choice(["claude-code", "generic"]),
     default="generic",
 )
-def install(adapter: str):
+def install(adapter: str) -> None:
     """Install DBNT into your AI system."""
     if adapter == "claude-code":
         ClaudeCodeAdapter().install()
@@ -460,7 +460,7 @@ def install(adapter: str):
     type=click.Choice(["claude-code", "generic"]),
     default="generic",
 )
-def uninstall(adapter: str):
+def uninstall(adapter: str) -> None:
     """Remove DBNT from your AI system."""
     if adapter == "claude-code":
         ClaudeCodeAdapter().uninstall()

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import Any
 
 # ─── FSRS-6 Simplified Decay ───────────────────────────────────────────────
 
@@ -68,7 +69,7 @@ class DecayState:
         self.applied_count += 1
         self.review(3)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "stability": round(self.stability, 3),
             "difficulty": round(self.difficulty, 3),
@@ -78,7 +79,7 @@ class DecayState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> DecayState:
+    def from_dict(cls, data: dict[str, Any]) -> DecayState:
         state = cls(
             stability=data.get("stability", 1.0),
             difficulty=data.get("difficulty", 0.5),
@@ -128,7 +129,7 @@ CREATE INDEX IF NOT EXISTS idx_learnings_dedup_key ON learnings(LOWER(SUBSTR(TRI
 # These strings appear in Claude's internal system reminders and shell command
 # suggestions — never from real user feedback. Entries matching any pattern
 # are silently dropped in LearningStore.add().
-_CONTAMINATION_PATTERNS: list[re.Pattern] = [
+_CONTAMINATION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"^Use tool_use:", re.IGNORECASE),
     re.compile(r"^Use Bash to run", re.IGNORECASE),
     re.compile(r"respond to these messages or otherwise consider", re.IGNORECASE),
@@ -208,7 +209,7 @@ class LearningStore:
                 (key,),
             ).fetchone()
             if existing:
-                return existing["id"]  # skip cross-session duplicate
+                return int(existing["id"])  # skip cross-session duplicate
 
         if session_id:
             existing = self.conn.execute(
@@ -216,7 +217,7 @@ class LearningStore:
                 (session_id, key),
             ).fetchone()
             if existing:
-                return existing["id"]  # skip within-session duplicate
+                return int(existing["id"])  # skip within-session duplicate
 
         cursor = self.conn.execute(
             "INSERT INTO learnings (text, source, domain, importance, created_at, session_id) "
@@ -227,7 +228,7 @@ class LearningStore:
         self.conn.commit()
         return cursor.lastrowid or -1
 
-    def get_unpromoted(self, domain: str | None = None) -> list[dict]:
+    def get_unpromoted(self, domain: str | None = None) -> list[dict[str, Any]]:
         """Get learnings not yet promoted to rules."""
         if domain:
             rows = self.conn.execute(
@@ -249,7 +250,7 @@ class LearningStore:
         placeholders = ",".join("?" * len(learning_ids))
         self.conn.execute(
             f"UPDATE learnings SET promoted_to = ? WHERE id IN ({placeholders})",
-            [rule_id] + learning_ids,
+            [rule_id, *learning_ids],
         )
         self.conn.commit()
 
@@ -293,7 +294,7 @@ class LearningStore:
 class PatternGroup:
     """A group of similar learnings that may warrant a rule."""
     representative: str        # Most common/central text
-    members: list[dict]        # Learning dicts
+    members: list[dict[str, Any]]  # Learning dicts
     confidence: str            # low/medium/high
     count: int
     domain: str
@@ -328,7 +329,7 @@ class PatternDetector:
             None, self._normalize(a), self._normalize(b)
         ).ratio()
 
-    def detect(self, learnings: list[dict]) -> list[PatternGroup]:
+    def detect(self, learnings: list[dict[str, Any]]) -> list[PatternGroup]:
         """Group similar learnings into patterns.
 
         Returns PatternGroups sorted by count (highest first).
@@ -336,7 +337,7 @@ class PatternDetector:
         if not learnings:
             return []
 
-        groups: list[list[dict]] = []
+        groups: list[list[dict[str, Any]]] = []
         used: set[int] = set()
 
         for i, learning in enumerate(learnings):
@@ -413,7 +414,7 @@ class DecayEngine:
         self.store.save_decay_state(rule_id, state)
         return state
 
-    def check(self, rule_id: str) -> dict:
+    def check(self, rule_id: str) -> dict[str, Any]:
         """Check a rule's health. Returns status dict."""
         state = self.store.get_decay_state(rule_id)
         r = state.retrievability()
