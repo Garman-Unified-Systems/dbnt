@@ -10,6 +10,7 @@ import json
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 class LearningType(Enum):
@@ -29,7 +30,7 @@ class ExtractedLearning:
     importance: float  # 1-10
     source: str = "transcript"
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "text": self.text,
             "type": self.type.value,
@@ -307,7 +308,7 @@ def extract_with_ollama(
     ]
 
 
-def _parse_ollama_response(text: str) -> list[dict]:
+def _parse_ollama_response(text: str) -> list[dict[str, Any]]:
     """Parse Ollama JSON response with fallbacks."""
     # Strip markdown fences
     text = re.sub(r"```(?:json)?\s*", "", text)
@@ -334,7 +335,7 @@ def _parse_ollama_response(text: str) -> list[dict]:
     return []
 
 
-def _validate_patterns(patterns: list) -> list[dict]:
+def _validate_patterns(patterns: list[Any]) -> list[dict[str, Any]]:
     """Validate and normalize extracted patterns."""
     valid = []
     for p in patterns:

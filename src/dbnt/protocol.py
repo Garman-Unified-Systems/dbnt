@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 
 class Command(Enum):
@@ -45,7 +46,7 @@ class ProtocolResponse:
 class ScoreState:
     """Persistent scoring state."""
     total_points: float = 0.0
-    events: list[dict] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
     tweak_count: int = 0  # Track consecutive tweaks
 
     def add_event(self, command: Command, points: float) -> None:
@@ -81,7 +82,7 @@ class ScoreState:
 # Command detection patterns
 # These are designed for SHORT directive messages, not natural language parsing.
 # For NL signal detection, use signals.detector instead.
-_PATTERNS: list[tuple[Command, re.Pattern]] = [
+_PATTERNS: list[tuple[Command, re.Pattern[str]]] = [
     # Order matters: most specific first
     # DB-family commands must appear at START of message to avoid false positives
     (Command.DBYC, re.compile(r"^\s*dbyc(?:\s|$|[.!])", re.IGNORECASE)),

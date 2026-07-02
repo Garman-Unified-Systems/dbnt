@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 from dbnt.adapters.base import BaseAdapter
 from dbnt.core import Rule, RuleType
@@ -238,7 +239,7 @@ exit 0
     def _register_hooks(self) -> None:
         """Register both hooks in settings.json."""
         if not self.settings_path.exists():
-            settings: dict = {"hooks": {}}
+            settings: dict[str, Any] = {"hooks": {}}
         else:
             try:
                 settings = json.loads(self.settings_path.read_text())
@@ -263,7 +264,7 @@ exit 0
         self.settings_path.write_text(json.dumps(settings, indent=2))
 
     def _ensure_hook_registered(
-        self, settings: dict, event: str, command: str
+        self, settings: dict[str, Any], event: str, command: str
     ) -> None:
         """Ensure a hook command is registered for an event."""
         if event not in settings["hooks"]:
