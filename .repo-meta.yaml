@@ -1,0 +1,7 @@
+repo: dbnt
+project: proj-substrate
+topics:
+  - topic-ai-agents
+  - topic-dev-tooling
+  - topic-governance
+function: fn-clean-core
