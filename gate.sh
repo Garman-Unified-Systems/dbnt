@@ -347,7 +347,7 @@ run_cleanroom_gates() {
 }
 
 check_clean_tree() {
-  [[ "$LOCAL_MODE" -eq 1 ]] || return
+  [[ "$LOCAL_MODE" -eq 1 ]] || return 0
   [[ "${REPO_GATE_SKIP_CLEAN:-0}" == "1" ]] && return
   need_cmd git
   if [[ -n "$(git status --porcelain)" ]]; then
