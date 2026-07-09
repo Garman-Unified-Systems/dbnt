@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import math
 import os
 import re
 from dataclasses import dataclass, field
@@ -42,6 +43,10 @@ class ProtocolResponse:
     points: float
     response_text: str
     should_encode: bool = False
+
+
+class ScoreStateSchemaError(ValueError):
+    """Raised when decoded score JSON does not satisfy the persisted schema."""
 
 
 @dataclass
@@ -220,18 +225,18 @@ class Protocol:
             return ScoreState()
         try:
             data = json.loads(self.score_path.read_text())
-            # Migrate legacy events that use 'delta' instead of 'points'
-            events = []
-            for e in data.get("events", []):
-                if "points" not in e and "delta" in e:
-                    e = {**e, "points": e["delta"], "command": e.get("event", "unknown")}
-                events.append(e)
+            if not isinstance(data, dict):
+                raise ScoreStateSchemaError("score state must be a JSON object")
+
+            total_points = _score_number(data.get("total_points", 0.0), "total_points")
+            events = _score_events(data.get("events", []))
+            tweak_count = _nonnegative_count(data.get("tweak_count", 0), "tweak_count")
             return ScoreState(
-                total_points=data.get("total_points", 0.0),
+                total_points=total_points,
                 events=events,
-                tweak_count=data.get("tweak_count", 0),
+                tweak_count=tweak_count,
             )
-        except (json.JSONDecodeError, KeyError, OSError) as exc:
+        except (json.JSONDecodeError, OSError, ScoreStateSchemaError) as exc:
             self._quarantine_corrupt_score(exc)
             return ScoreState()
 
@@ -265,3 +270,41 @@ class Protocol:
         note_path = quarantine_path.with_name(f"{quarantine_path.name}.reason")
         with contextlib.suppress(OSError):
             note_path.write_text(f"{type(exc).__name__}: {exc}\n")
+
+
+def _score_number(value: object, field_name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ScoreStateSchemaError(f"{field_name} must be a finite number")
+    return float(value)
+
+
+def _nonnegative_count(value: object, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ScoreStateSchemaError(f"{field_name} must be a nonnegative integer")
+    return value
+
+
+def _score_events(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ScoreStateSchemaError("events must be an array")
+
+    events: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ScoreStateSchemaError(f"events[{index}] must be an object")
+        event: dict[str, Any] = dict(item)
+        for numeric_field in ("points", "delta", "score", "weight"):
+            if numeric_field in event:
+                _score_number(event[numeric_field], f"events[{index}].{numeric_field}")
+        if "points" not in event and "delta" in event:
+            event = {
+                **event,
+                "points": event["delta"],
+                "command": event.get("event", "unknown"),
+            }
+        events.append(event)
+    return events

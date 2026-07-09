@@ -12,5 +12,8 @@ def test_protocol_hook_quarantines_corrupt_score(tmp_path):
     hook = (tmp_path / "hooks" / "dbnt-protocol.sh").read_text()
     assert "${SCORE_FILE}.corrupt" in hook
     assert "initialize_score_file" in hook
-    assert "jq -e 'type == \"object\"" in hook
+    assert "validate_score_file" in hook
+    assert '(.total_points // 0) | type == "number"' in hook
+    assert '(.tweak_count // 0) | type == "number"' in hook
+    assert 'all(.[]; type == "object"' in hook
     assert 'TMP_SCORE="${SCORE_FILE}.$$.tmp"' in hook

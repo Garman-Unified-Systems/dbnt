@@ -147,7 +147,23 @@ initialize_score_file() {
     echo '{"total_points":0,"events":[],"tweak_count":0,"last_updated":"'"$TIMESTAMP"'"}' | jq . > "$SCORE_FILE"
 }
 
-if [ -f "$SCORE_FILE" ] && ! jq -e 'type == "object" and ((.events // []) | type == "array")' "$SCORE_FILE" >/dev/null 2>&1; then
+validate_score_file() {
+    jq -e '
+        type == "object"
+        and ((.total_points // 0) | type == "number")
+        and ((.tweak_count // 0) | type == "number")
+        and ((.tweak_count // 0) >= 0)
+        and (((.tweak_count // 0) | floor) == (.tweak_count // 0))
+        and ((.events // []) | type == "array")
+        and ((.events // []) | all(.[]; type == "object"
+            and ((has("points") | not) or (.points | type == "number"))
+            and ((has("delta") | not) or (.delta | type == "number"))
+            and ((has("score") | not) or (.score | type == "number"))
+            and ((has("weight") | not) or (.weight | type == "number"))))
+    ' "$1" >/dev/null 2>&1
+}
+
+if [ -f "$SCORE_FILE" ] && ! validate_score_file "$SCORE_FILE"; then
     mv "$SCORE_FILE" "${SCORE_FILE}.corrupt.$(date -u +"%Y%m%dT%H%M%SZ").$$"
 fi
 

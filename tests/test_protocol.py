@@ -1,7 +1,10 @@
 """Tests for DBNT protocol."""
 
+import json
 import tempfile
 from pathlib import Path
+
+import pytest
 
 from dbnt.protocol import Action, Command, Protocol
 
@@ -155,6 +158,38 @@ class TestScoring:
         assert p2.state.total_points == 3.0
         assert len(p2.state.events) == 1
         assert not list(tmp_path.glob("score.json.*.tmp"))
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            [],
+            {"events": [7]},
+            {"events": "wrong-type"},
+            {"total_points": "7", "events": []},
+            {"total_points": True, "events": []},
+            {"events": [], "tweak_count": 1.5},
+            {"events": [], "tweak_count": -1},
+            {"events": [{"points": "3"}]},
+        ],
+    )
+    def test_wrong_shape_score_is_quarantined_and_returns_clean_state(
+        self, tmp_path, payload
+    ):
+        score_path = tmp_path / "score.json"
+        score_path.write_text(json.dumps(payload))
+
+        state = Protocol(state_dir=tmp_path).state
+
+        assert state.total_points == 0.0
+        assert state.events == []
+        assert state.tweak_count == 0
+        quarantined = [
+            path
+            for path in tmp_path.glob("score.json.corrupt-*")
+            if not path.name.endswith(".reason")
+        ]
+        assert len(quarantined) == 1
+        assert list(tmp_path.glob("score.json.corrupt-*.reason"))
 
 
 class TestResponseText:
