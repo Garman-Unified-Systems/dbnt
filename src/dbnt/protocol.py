@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -229,7 +231,8 @@ class Protocol:
                 events=events,
                 tweak_count=data.get("tweak_count", 0),
             )
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, OSError) as exc:
+            self._quarantine_corrupt_score(exc)
             return ScoreState()
 
     def _save_state(self) -> None:
@@ -241,4 +244,24 @@ class Protocol:
             "tweak_count": self.state.tweak_count,
             "last_updated": datetime.now(timezone.utc).isoformat(),
         }
-        self.score_path.write_text(json.dumps(data, indent=2))
+        tmp_path = self.score_path.with_name(f"{self.score_path.name}.{os.getpid()}.tmp")
+        tmp_path.write_text(json.dumps(data, indent=2))
+        tmp_path.replace(self.score_path)
+
+    def _quarantine_corrupt_score(self, exc: Exception) -> None:
+        """Move an unreadable score file aside before starting fresh."""
+        if not self.score_path.exists():
+            return
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        quarantine_path = self.score_path.with_name(
+            f"{self.score_path.name}.corrupt-{timestamp}-{os.getpid()}"
+        )
+        try:
+            self.score_path.replace(quarantine_path)
+        except OSError:
+            return
+
+        note_path = quarantine_path.with_name(f"{quarantine_path.name}.reason")
+        with contextlib.suppress(OSError):
+            note_path.write_text(f"{type(exc).__name__}: {exc}\n")
