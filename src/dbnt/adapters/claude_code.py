@@ -141,24 +141,49 @@ fi
 SCORE_DIR="$HOME/.dbnt"
 mkdir -p "$SCORE_DIR"
 SCORE_FILE="$SCORE_DIR/score.json"
+TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-if [ -f "$SCORE_FILE" ]; then
-    TOTAL=$(jq -r '.total_points // 0' "$SCORE_FILE" 2>/dev/null || echo 0)
-else
-    TOTAL=0
+initialize_score_file() {
+    echo '{"total_points":0,"events":[],"tweak_count":0,"last_updated":"'"$TIMESTAMP"'"}' | jq . > "$SCORE_FILE"
+}
+
+validate_score_file() {
+    jq -e '
+        type == "object"
+        and ((.total_points // 0) | type == "number")
+        and ((.tweak_count // 0) | type == "number")
+        and ((.tweak_count // 0) >= 0)
+        and (((.tweak_count // 0) | floor) == (.tweak_count // 0))
+        and ((.events // []) | type == "array")
+        and ((.events // []) | all(.[]; type == "object"
+            and ((has("points") | not) or (.points | type == "number"))
+            and ((has("delta") | not) or (.delta | type == "number"))
+            and ((has("score") | not) or (.score | type == "number"))
+            and ((has("weight") | not) or (.weight | type == "number"))))
+    ' "$1" >/dev/null 2>&1
+}
+
+if [ -f "$SCORE_FILE" ] && ! validate_score_file "$SCORE_FILE"; then
+    mv "$SCORE_FILE" "${SCORE_FILE}.corrupt.$(date -u +"%Y%m%dT%H%M%SZ").$$"
 fi
+
+if [ ! -f "$SCORE_FILE" ]; then
+    initialize_score_file
+fi
+
+TOTAL=$(jq -r '.total_points // 0' "$SCORE_FILE" 2>/dev/null || echo 0)
 
 NEW_TOTAL=$(echo "$TOTAL + $POINTS" | bc)
 
 # Append event
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 EVENT="{\\"command\\":\\"$(echo $CMD | tr '[:upper:]' '[:lower:]')\\",\\"points\\":$POINTS,\\"timestamp\\":\\"$TIMESTAMP\\"}"
-
-if [ -f "$SCORE_FILE" ]; then
-    jq --argjson evt "$EVENT" '.total_points = '"$NEW_TOTAL"' | .events += [$evt] | .last_updated = "'"$TIMESTAMP"'"' "$SCORE_FILE" > "${SCORE_FILE}.tmp" && mv "${SCORE_FILE}.tmp" "$SCORE_FILE"
-else
-    echo "{\\"total_points\\":$NEW_TOTAL,\\"events\\":[$EVENT],\\"tweak_count\\":0,\\"last_updated\\":\\"$TIMESTAMP\\"}" | jq . > "$SCORE_FILE"
+TMP_SCORE="${SCORE_FILE}.$$.tmp"
+if ! jq --argjson evt "$EVENT" '.total_points = '"$NEW_TOTAL"' | .events += [$evt] | .last_updated = "'"$TIMESTAMP"'"' "$SCORE_FILE" > "$TMP_SCORE"; then
+    rm -f "$TMP_SCORE"
+    echo '{"result":"continue"}'
+    exit 0
 fi
+mv "$TMP_SCORE" "$SCORE_FILE"
 
 echo '{"result":"continue"}'
 exit 0
