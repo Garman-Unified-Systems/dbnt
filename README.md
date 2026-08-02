@@ -45,13 +45,14 @@ Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*,
 
 ## What DBNT Does
 
-Five subsystems, one goal — agents that get better over time:
+Six subsystems, one goal — agents that get better over time:
 
 - **Protocol Engine** — Escalating correction commands (DB → DBN → DBNM → DBYC) with point scoring and structured action routing
 - **Signal Detection** — Classifies natural language feedback without requiring special syntax. "That's not quite right" is as valid as `dbn`
 - **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
 - **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
 - **FSRS Decay Engine** — Rules that get applied grow stronger. Rules that sit unused fade toward archival. Based on the [FSRS-6 spaced-repetition algorithm](https://github.com/open-spaced-repetition/py-fsrs)
+- **Bounded Agency Policy** — Deterministically classifies a proposed next step as MOVE, GATE, or DROP so correction produces forward motion instead of overstep/passivity oscillation
 
 ---
 
@@ -139,6 +140,76 @@ encode_success(
     pattern="Used dataclass for config objects",
     context="Clean, typed, no dict key errors"
 )
+```
+
+### Bounded Agency API
+
+Feedback is useful only if it improves the next action. DBNT's bounded-agency
+policy operates on structured runtime facts rather than guessing intent from
+natural language:
+
+```python
+from dbnt import ActionProposal, Effect, classify_action
+
+decision = classify_action(
+    ActionProposal(
+        name="apply the tested local fix",
+        advances_outcome=True,
+        effect=Effect.LOCAL_MUTATION,
+    )
+)
+assert decision.disposition.value == "move"
+
+external = classify_action(
+    ActionProposal(
+        name="publish without approval",
+        advances_outcome=True,
+        effect=Effect.EXTERNAL_MUTATION,
+    )
+)
+assert external.disposition.value == "gate"
+```
+
+The policy uses one invariant: **advance the goal with the smallest bounded
+move; gate only on a real unsatisfied boundary.**
+
+- **MOVE** — in-scope action or live-state evidence may proceed
+- **GATE** — scope, current-state, external, irreversible, credential, privacy,
+  or authority requirements remain unsatisfied
+- **DROP** — narration or ceremony produces neither a state change nor
+  decision-grade evidence
+
+Run the built-in regression suite with `dbnt agency-check`. It covers safe
+bounded fixes, live-state verification, duplicate permission requests, passive
+stopping after correction, stale sealed transactions, and unauthorized external
+mutation.
+
+`effect` is required. External effects automatically derive both the external
+and authority boundaries, and irreversible effects derive the irreversible and
+authority boundaries. A caller cannot turn an external action into MOVE merely
+by omitting those boundary labels or by self-declaring boundary grants;
+`authority_verified=True` is a separate required fact.
+
+Runtime adapters can enforce the decision before invoking a callback:
+
+```python
+from dbnt import ActionProposal, Effect
+from dbnt.adapters.generic import GenericAdapter
+
+adapter = GenericAdapter()
+proposal = ActionProposal(
+    name="apply tested fix",
+    advances_outcome=True,
+    effect=Effect.LOCAL_MUTATION,
+)
+result = adapter.run_action(proposal, lambda: "done")  # raises unless MOVE
+```
+
+For process boundaries, `dbnt agency-decide` classifies one supplied action as
+JSON and exits `0` only for MOVE (`2` for GATE, `3` for DROP):
+
+```bash
+dbnt agency-decide --name publish --effect external_mutation
 ```
 
 ```python
@@ -328,6 +399,9 @@ This prevents the rule store from bloating with stale context that hurts more th
 # Protocol
 dbnt process "dbnm"              # Detect and route a command
 dbnt score                        # View scoring history
+dbnt agency-check                 # Verify MOVE/GATE/DROP policy regressions
+dbnt agency-decide --name inspect --effect observe --evidence
+                                  # Enforce one runtime action decision
 
 # Signals
 dbnt detect "that's perfect"      # Classify a signal

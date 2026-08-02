@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Deterministic bounded-agency policy for MOVE/GATE/DROP action classification
+- Structured execution-boundary model covering scope, current state, external effects, irreversibility, credentials, privacy, and authority
+- Built-in regression cases for overstep/passivity oscillation, duplicate permission loops, and stale artifact execution
+- `dbnt agency-check` command for running the bounded-agency regression suite
+- Runtime `dbnt agency-decide` command and adapter `run_action()` enforcement path
+- Mandatory action-effect typing and separately verified authority for external, irreversible, credential, or privacy boundaries
+
 ## [0.5.3] - 2026-07-02
 ### Fixed
 - `lastrowid` null-safety in `LearningStore.add()` — returns `-1` instead of `None` on insert failure
