@@ -6,14 +6,17 @@ Feedback-driven. Signal-driven. Learning-driven.
 
 from dbnt.agency import (
     ActionProposal,
+    ActionRejectedError,
     AgencyDecision,
     Boundary,
     Disposition,
+    Effect,
     RegressionCase,
     RegressionFailure,
     RegressionResult,
     classify_action,
     default_regression_cases,
+    enforce_action,
     evaluate_cases,
 )
 from dbnt.core import (
@@ -41,12 +44,15 @@ __version__ = "0.5.3"
 __all__ = [
     # Bounded agency
     "classify_action",
+    "enforce_action",
     "evaluate_cases",
     "default_regression_cases",
     "ActionProposal",
+    "ActionRejectedError",
     "AgencyDecision",
     "Boundary",
     "Disposition",
+    "Effect",
     "RegressionCase",
     "RegressionFailure",
     "RegressionResult",

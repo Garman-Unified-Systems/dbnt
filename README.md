@@ -149,13 +149,13 @@ policy operates on structured runtime facts rather than guessing intent from
 natural language:
 
 ```python
-from dbnt import ActionProposal, Boundary, classify_action
+from dbnt import ActionProposal, Effect, classify_action
 
 decision = classify_action(
     ActionProposal(
         name="apply the tested local fix",
         advances_outcome=True,
-        changes_state=True,
+        effect=Effect.LOCAL_MUTATION,
     )
 )
 assert decision.disposition.value == "move"
@@ -164,9 +164,7 @@ external = classify_action(
     ActionProposal(
         name="publish without approval",
         advances_outcome=True,
-        changes_state=True,
-        reversible=False,
-        boundaries=frozenset({Boundary.EXTERNAL}),
+        effect=Effect.EXTERNAL_MUTATION,
     )
 )
 assert external.disposition.value == "gate"
@@ -185,6 +183,34 @@ Run the built-in regression suite with `dbnt agency-check`. It covers safe
 bounded fixes, live-state verification, duplicate permission requests, passive
 stopping after correction, stale sealed transactions, and unauthorized external
 mutation.
+
+`effect` is required. External effects automatically derive both the external
+and authority boundaries, and irreversible effects derive the irreversible and
+authority boundaries. A caller cannot turn an external action into MOVE merely
+by omitting those boundary labels or by self-declaring boundary grants;
+`authority_verified=True` is a separate required fact.
+
+Runtime adapters can enforce the decision before invoking a callback:
+
+```python
+from dbnt import ActionProposal, Effect
+from dbnt.adapters.generic import GenericAdapter
+
+adapter = GenericAdapter()
+proposal = ActionProposal(
+    name="apply tested fix",
+    advances_outcome=True,
+    effect=Effect.LOCAL_MUTATION,
+)
+result = adapter.run_action(proposal, lambda: "done")  # raises unless MOVE
+```
+
+For process boundaries, `dbnt agency-decide` classifies one supplied action as
+JSON and exits `0` only for MOVE (`2` for GATE, `3` for DROP):
+
+```bash
+dbnt agency-decide --name publish --effect external_mutation
+```
 
 ```python
 from dbnt import LearningStore, PatternDetector, DecayEngine
@@ -374,6 +400,8 @@ This prevents the rule store from bloating with stale context that hurts more th
 dbnt process "dbnm"              # Detect and route a command
 dbnt score                        # View scoring history
 dbnt agency-check                 # Verify MOVE/GATE/DROP policy regressions
+dbnt agency-decide --name inspect --effect observe --evidence
+                                  # Enforce one runtime action decision
 
 # Signals
 dbnt detect "that's perfect"      # Classify a signal

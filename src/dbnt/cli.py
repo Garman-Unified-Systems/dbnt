@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+import json
+
 import click
 
 from dbnt.adapters.claude_code import ClaudeCodeAdapter
 from dbnt.adapters.generic import GenericAdapter
-from dbnt.agency import default_regression_cases, evaluate_cases
+from dbnt.agency import (
+    ActionProposal,
+    Boundary,
+    Disposition,
+    Effect,
+    classify_action,
+    default_regression_cases,
+    evaluate_cases,
+)
 from dbnt.core import check_dissonance, encode_failure, encode_success
 from dbnt.learning import DecayEngine, LearningStore, PatternDetector
 from dbnt.protocol import Protocol
@@ -85,6 +95,76 @@ def agency_check() -> None:
             err=True,
         )
     raise click.exceptions.Exit(1)
+
+
+@main.command("agency-decide")
+@click.option("--name", required=True, help="Human-readable action name")
+@click.option(
+    "--effect",
+    type=click.Choice([effect.value for effect in Effect]),
+    required=True,
+    help="Observable action effect; required to prevent permissive omission",
+)
+@click.option("--advances-outcome/--does-not-advance", default=True)
+@click.option("--evidence/--no-evidence", default=False)
+@click.option("--in-scope/--out-of-scope", default=True)
+@click.option("--reversible/--irreversible", default=True)
+@click.option(
+    "--boundary",
+    type=click.Choice([boundary.value for boundary in Boundary]),
+    multiple=True,
+)
+@click.option(
+    "--authorized-boundary",
+    type=click.Choice([boundary.value for boundary in Boundary]),
+    multiple=True,
+)
+@click.option("--authority-verified", is_flag=True)
+@click.option("--requires-current-state", is_flag=True)
+@click.option("--current-state-verified", is_flag=True)
+def agency_decide(
+    name: str,
+    effect: str,
+    advances_outcome: bool,
+    evidence: bool,
+    in_scope: bool,
+    reversible: bool,
+    boundary: tuple[str, ...],
+    authorized_boundary: tuple[str, ...],
+    authority_verified: bool,
+    requires_current_state: bool,
+    current_state_verified: bool,
+) -> None:
+    """Classify one runtime action; only MOVE exits successfully."""
+
+    proposal = ActionProposal(
+        name=name,
+        advances_outcome=advances_outcome,
+        effect=Effect(effect),
+        produces_evidence=evidence,
+        in_scope=in_scope,
+        reversible=reversible,
+        boundaries=frozenset(Boundary(value) for value in boundary),
+        authorized_boundaries=frozenset(Boundary(value) for value in authorized_boundary),
+        authority_verified=authority_verified,
+        requires_current_state=requires_current_state,
+        current_state_verified=current_state_verified,
+    )
+    decision = classify_action(proposal)
+    click.echo(
+        json.dumps(
+            {
+                "disposition": decision.disposition.value,
+                "reasons": list(decision.reasons),
+                "unmet_boundaries": [item.value for item in decision.unmet_boundaries],
+            },
+            sort_keys=True,
+        )
+    )
+    if decision.disposition is Disposition.GATE:
+        raise click.exceptions.Exit(2)
+    if decision.disposition is Disposition.DROP:
+        raise click.exceptions.Exit(3)
 
 
 # ─── Signal Detection ──────────────────────────────────────────────────────

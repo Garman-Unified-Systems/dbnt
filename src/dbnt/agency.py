@@ -23,6 +23,18 @@ class Disposition(Enum):
     DROP = "drop"
 
 
+class Effect(Enum):
+    """Observable effect of a proposed action.
+
+    The field is mandatory so callers cannot silently omit external effects and
+    receive a permissive default.
+    """
+
+    OBSERVE = "observe"
+    LOCAL_MUTATION = "local_mutation"
+    EXTERNAL_MUTATION = "external_mutation"
+
+
 class Boundary(Enum):
     """Conditions that must be satisfied before an action can move."""
 
@@ -46,12 +58,13 @@ class ActionProposal:
 
     name: str
     advances_outcome: bool
-    changes_state: bool
+    effect: Effect
     produces_evidence: bool = False
     in_scope: bool = True
     reversible: bool = True
     boundaries: frozenset[Boundary] = field(default_factory=frozenset)
     authorized_boundaries: frozenset[Boundary] = field(default_factory=frozenset)
+    authority_verified: bool = False
     requires_current_state: bool = False
     current_state_verified: bool = False
 
@@ -63,6 +76,16 @@ class AgencyDecision:
     disposition: Disposition
     reasons: tuple[str, ...]
     unmet_boundaries: tuple[Boundary, ...] = ()
+
+
+class ActionRejectedError(RuntimeError):
+    """Raised when a runtime adapter attempts a GATE or DROP action."""
+
+    def __init__(self, decision: AgencyDecision):
+        self.decision = decision
+        boundaries = ", ".join(boundary.value for boundary in decision.unmet_boundaries)
+        detail = boundaries or "; ".join(decision.reasons)
+        super().__init__(f"action classified {decision.disposition.value}: {detail}")
 
 
 @dataclass(frozen=True)
@@ -111,7 +134,7 @@ def classify_action(proposal: ActionProposal) -> AgencyDecision:
             reasons=("does not advance the stated outcome",),
         )
 
-    if not proposal.changes_state and not proposal.produces_evidence:
+    if proposal.effect is Effect.OBSERVE and not proposal.produces_evidence:
         return AgencyDecision(
             disposition=Disposition.DROP,
             reasons=("produces neither a state change nor decision-grade evidence",),
@@ -122,9 +145,28 @@ def classify_action(proposal: ActionProposal) -> AgencyDecision:
         unmet.add(Boundary.SCOPE)
 
     required = set(proposal.boundaries)
+    if proposal.effect is Effect.EXTERNAL_MUTATION:
+        required.add(Boundary.EXTERNAL)
     if not proposal.reversible:
         required.add(Boundary.IRREVERSIBLE)
+
+    authority_trigger = {
+        Boundary.EXTERNAL,
+        Boundary.IRREVERSIBLE,
+        Boundary.CREDENTIAL,
+        Boundary.PRIVACY,
+        Boundary.AUTHORITY,
+    }
+    if required & authority_trigger:
+        required.add(Boundary.AUTHORITY)
+
     unmet.update(required - set(proposal.authorized_boundaries))
+    # Boundary grants describe scope. They cannot self-certify their source.
+    if Boundary.AUTHORITY in required:
+        if proposal.authority_verified:
+            unmet.discard(Boundary.AUTHORITY)
+        else:
+            unmet.add(Boundary.AUTHORITY)
 
     # Current truth must be observed; it cannot be satisfied by old authority.
     if proposal.requires_current_state and not proposal.current_state_verified:
@@ -142,6 +184,15 @@ def classify_action(proposal: ActionProposal) -> AgencyDecision:
         disposition=Disposition.MOVE,
         reasons=("bounded, outcome-advancing action may proceed",),
     )
+
+
+def enforce_action(proposal: ActionProposal) -> AgencyDecision:
+    """Return a MOVE decision or reject execution before side effects occur."""
+
+    decision = classify_action(proposal)
+    if decision.disposition is not Disposition.MOVE:
+        raise ActionRejectedError(decision)
+    return decision
 
 
 def evaluate_cases(cases: Iterable[RegressionCase]) -> RegressionResult:
@@ -177,7 +228,7 @@ def default_regression_cases() -> tuple[RegressionCase, ...]:
             proposal=ActionProposal(
                 name="implement and test an in-scope reversible fix",
                 advances_outcome=True,
-                changes_state=True,
+                effect=Effect.LOCAL_MUTATION,
             ),
             expected=Disposition.MOVE,
         ),
@@ -186,7 +237,7 @@ def default_regression_cases() -> tuple[RegressionCase, ...]:
             proposal=ActionProposal(
                 name="observe the exact live prestate before mutation",
                 advances_outcome=True,
-                changes_state=False,
+                effect=Effect.OBSERVE,
                 produces_evidence=True,
             ),
             expected=Disposition.MOVE,
@@ -196,7 +247,7 @@ def default_regression_cases() -> tuple[RegressionCase, ...]:
             proposal=ActionProposal(
                 name="ask again after the required authority is already present",
                 advances_outcome=True,
-                changes_state=False,
+                effect=Effect.OBSERVE,
             ),
             expected=Disposition.DROP,
         ),
@@ -205,7 +256,7 @@ def default_regression_cases() -> tuple[RegressionCase, ...]:
             proposal=ActionProposal(
                 name="stop all safe work because the previous action was criticized",
                 advances_outcome=False,
-                changes_state=False,
+                effect=Effect.OBSERVE,
             ),
             expected=Disposition.DROP,
         ),
@@ -214,7 +265,7 @@ def default_regression_cases() -> tuple[RegressionCase, ...]:
             proposal=ActionProposal(
                 name="execute from exact old receipts without checking current state",
                 advances_outcome=True,
-                changes_state=True,
+                effect=Effect.LOCAL_MUTATION,
                 requires_current_state=True,
                 current_state_verified=False,
             ),
@@ -225,9 +276,8 @@ def default_regression_cases() -> tuple[RegressionCase, ...]:
             proposal=ActionProposal(
                 name="publish or merge without authority",
                 advances_outcome=True,
-                changes_state=True,
+                effect=Effect.EXTERNAL_MUTATION,
                 reversible=False,
-                boundaries=frozenset({Boundary.EXTERNAL}),
             ),
             expected=Disposition.GATE,
         ),
