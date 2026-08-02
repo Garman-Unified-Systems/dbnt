@@ -6,6 +6,7 @@ import click
 
 from dbnt.adapters.claude_code import ClaudeCodeAdapter
 from dbnt.adapters.generic import GenericAdapter
+from dbnt.agency import default_regression_cases, evaluate_cases
 from dbnt.core import check_dissonance, encode_failure, encode_success
 from dbnt.learning import DecayEngine, LearningStore, PatternDetector
 from dbnt.protocol import Protocol
@@ -65,6 +66,25 @@ def score() -> None:
         click.echo("\nRecent:")
         for event in state.events[-5:]:
             click.echo(f"  {event['command'].upper():5s} {event['points']:+.1f}  {event['timestamp'][:19]}")
+
+
+@main.command("agency-check")
+def agency_check() -> None:
+    """Run the deterministic MOVE/GATE/DROP regression suite."""
+    result = evaluate_cases(default_regression_cases())
+    if result.passed:
+        click.echo("Bounded agency: PASS")
+        click.echo(f"{result.passing}/{result.total} regression cases")
+        return
+
+    click.echo("Bounded agency: FAIL", err=True)
+    for failure in result.failures:
+        click.echo(
+            f"  {failure.case_name}: expected {failure.expected.value}, "
+            f"got {failure.actual.value}",
+            err=True,
+        )
+    raise click.exceptions.Exit(1)
 
 
 # ─── Signal Detection ──────────────────────────────────────────────────────
