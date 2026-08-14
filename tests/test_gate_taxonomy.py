@@ -1,8 +1,8 @@
 """Test that gate.sh project taxonomy uses generic labels without internal project names."""
-import pathlib
 
+from pathlib import Path
 
-GATE_SH = pathlib.Path(__file__).parent.parent / "gate.sh"
+GATE_SH = Path(__file__).parent.parent / "gate.sh"
 
 NEW_LABELS = [
     "proj-core",
