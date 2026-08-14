@@ -99,7 +99,7 @@ validate_taxonomy() {
   project="$(printf '%s\n' "$projects" | sed -n '1p')"
   function="$(printf '%s\n' "$functions" | sed -n '1p')"
 
-  require_one_of "$project" "proj-gus proj-office-369 proj-abacus proj-borussia proj-splat proj-finance proj-straincellar proj-abledumb proj-familyrecipes proj-sites proj-research-kb proj-substrate"
+  require_one_of "$project" "proj-core proj-practice proj-tools proj-research proj-web proj-data proj-media proj-reference proj-infra proj-archive"
   require_one_of "$function" "fn-clean-core fn-practice fn-scaffolding fn-dataset fn-reference fn-archive-candidate"
 
   while IFS= read -r topic; do
