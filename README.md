@@ -9,65 +9,6 @@
 
 ---
 
-## The Problem
-
-Your AI agents make the same mistakes every session. You correct them, they improve — and then the context window resets and they're back to square one. Traditional memory systems record what went wrong, which creates agents that know a hundred ways to fail but can't reliably replicate success. DBNT encodes both sides of the feedback loop with information-theoretic weighting: success signals carry 1.5x weight because a working path is rarer and more valuable than a broken one.
-
----
-
-## Why DBNT — The Structured Feedback Gap
-
-The bottleneck in agentic AI isn't model capability. It's the feedback loop between human and AI.
-
-Unstructured corrections — "that's wrong, try again" — don't transfer across sessions, don't distinguish severity, and don't accumulate into durable knowledge. The agent improves within a conversation, then resets. You correct the same mistake next week.
-
-The failure mode compounds: AI agents generating plausible but unsupported output (hallucination) is a known and documented problem across every major provider. Even production-grade deep research tools carry rates that major providers have documented in their own evals. When the human correction loop is ad-hoc, these errors recur without accumulating toward resolution.
-
-The missing piece is a structured protocol for human-to-AI correction signals. Not chat. Not thumbs-up/thumbs-down. A system that grades severity, distinguishes signal types, encodes learnings persistently, and weights success paths higher than failure paths.
-
-That is what DBNT implements.
-
-### Unstructured Feedback vs DBNT Protocol
-
-| Dimension | Unstructured Feedback | DBNT Protocol |
-|-----------|----------------------|---------------|
-| Signal clarity | Ambiguous ("hmm, try again") | Auto-classified from natural language — severity inferred from context |
-| Persistence | Lost at session boundary | Encoded as rules, survives indefinitely |
-| Success handling | Ignored or undifferentiated | Weighted 1.5x, separately tracked |
-| Failure handling | Vague disapproval | Categorized, pattern-detected, auto-promoted |
-| Content fabrication defense | None | Signal detection catches drift; corrections encode immediately |
-| Learning lifecycle | Accumulates without pruning | FSRS-6 decay — stale rules archive, active rules strengthen |
-| Multi-agent readiness | N/A | Shared rule stores, cross-agent propagation |
-
-Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*, encoding *what right looks like*, and managing those learnings over time — that scales.
-
----
-
-## What DBNT Does
-
-Five subsystems, one goal — agents that get better over time:
-
-- **Protocol Engine** — Auto-classifies natural language feedback into weighted signals. "That was wrong", "do better", "that worked perfectly" all route correctly without any special syntax.
-- **Signal Detection** — Infers success vs failure, severity, and scope from context. Explicit shorthands work as aliases but are never required.
-- **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
-- **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
-- **FSRS Decay Engine** — Rules that get applied grow stronger. Rules that sit unused fade toward archival. Based on the [FSRS-6 spaced-repetition algorithm](https://github.com/open-spaced-repetition/py-fsrs)
-
----
-
-## Why Success Signals Outweigh Failure
-
-Traditional approaches minimize loss. DBNT maximizes learning.
-
-The intuition: there are infinite ways to fail a task, but only a handful of ways to do it well. A failure signal tells you one path to avoid out of infinite bad paths. A success signal tells you one path that works out of very few good paths — that's a higher information density per signal.
-
-This is the **Ralph Wiggum Problem**: knowing 100 things not to do doesn't tell you what to do. Doctors study healthy patients. Athletes watch film of good plays. DBNT weights the game film accordingly.
-
-> Failure: 1.0x weight — avoid this path
-> Success: 1.5x weight — replicate this path
-
----
-
 ## Quick Start
 
 ### Installation
@@ -159,6 +100,65 @@ engine = DecayEngine(store)
 engine.boost("rule_timezone_abc")       # Applied → stability increases
 status = engine.check("rule_old_123")   # → {"status": "archive", "retrievability": 0.2}
 ```
+
+---
+
+## The Problem
+
+Your AI agents make the same mistakes every session. You correct them, they improve — and then the context window resets and they're back to square one. Traditional memory systems record what went wrong, which creates agents that know a hundred ways to fail but can't reliably replicate success. DBNT encodes both sides of the feedback loop with information-theoretic weighting: success signals carry 1.5x weight because a working path is rarer and more valuable than a broken one.
+
+---
+
+## Why DBNT — The Structured Feedback Gap
+
+The bottleneck in agentic AI isn't model capability. It's the feedback loop between human and AI.
+
+Unstructured corrections — "that's wrong, try again" — don't transfer across sessions, don't distinguish severity, and don't accumulate into durable knowledge. The agent improves within a conversation, then resets. You correct the same mistake next week.
+
+The failure mode compounds: AI agents generating plausible but unsupported output (hallucination) is a known and documented problem across every major provider. Even production-grade deep research tools carry rates that major providers have documented in their own evals. When the human correction loop is ad-hoc, these errors recur without accumulating toward resolution.
+
+The missing piece is a structured protocol for human-to-AI correction signals. Not chat. Not thumbs-up/thumbs-down. A system that grades severity, distinguishes signal types, encodes learnings persistently, and weights success paths higher than failure paths.
+
+That is what DBNT implements.
+
+### Unstructured Feedback vs DBNT Protocol
+
+| Dimension | Unstructured Feedback | DBNT Protocol |
+|-----------|----------------------|---------------|
+| Signal clarity | Ambiguous ("hmm, try again") | Auto-classified from natural language — severity inferred from context |
+| Persistence | Lost at session boundary | Encoded as rules, survives indefinitely |
+| Success handling | Ignored or undifferentiated | Weighted 1.5x, separately tracked |
+| Failure handling | Vague disapproval | Categorized, pattern-detected, auto-promoted |
+| Content fabrication defense | None | Signal detection catches drift; corrections encode immediately |
+| Learning lifecycle | Accumulates without pruning | FSRS-6 decay — stale rules archive, active rules strengthen |
+| Multi-agent readiness | N/A | Shared rule stores, cross-agent propagation |
+
+Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*, encoding *what right looks like*, and managing those learnings over time — that scales.
+
+---
+
+## What DBNT Does
+
+Five subsystems, one goal — agents that get better over time:
+
+- **Protocol Engine** — Auto-classifies natural language feedback into weighted signals. "That was wrong", "do better", "that worked perfectly" all route correctly without any special syntax.
+- **Signal Detection** — Infers success vs failure, severity, and scope from context. Explicit shorthands work as aliases but are never required.
+- **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
+- **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
+- **FSRS Decay Engine** — Rules that get applied grow stronger. Rules that sit unused fade toward archival. Based on the [FSRS-6 spaced-repetition algorithm](https://github.com/open-spaced-repetition/py-fsrs)
+
+---
+
+## Why Success Signals Outweigh Failure
+
+Traditional approaches minimize loss. DBNT maximizes learning.
+
+The intuition: there are infinite ways to fail a task, but only a handful of ways to do it well. A failure signal tells you one path to avoid out of infinite bad paths. A success signal tells you one path that works out of very few good paths — that's a higher information density per signal.
+
+This is the **Ralph Wiggum Problem**: knowing 100 things not to do doesn't tell you what to do. Doctors study healthy patients. Athletes watch film of good plays. DBNT weights the game film accordingly.
+
+> Failure: 1.0x weight — avoid this path
+> Success: 1.5x weight — replicate this path
 
 ---
 
@@ -308,7 +308,9 @@ Human-readable. Diffable. Version-controllable if you want.
 
 ---
 
-## Capture → Compound → Mine
+## Capture → Compound → Mine — GUSystems Skill Pack #1
+
+The DBNT x ABCD skill is the first entry in the GUSystems Skill Pack series — open-source, production-proven skills from Garman Unified Systems. Install the skill directly via [garman-skills](https://github.com/idirectships/garman-skills).
 
 The DBNT feedback loop has three phases beyond individual rule capture:
 
