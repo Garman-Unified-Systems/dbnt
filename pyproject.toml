@@ -1,6 +1,6 @@
 [project]
 name = "dbnt"
-version = "0.5.3"
+version = "0.6.0"
 description = "Universal feedback protocol and learning system for AI agents. Turn corrections into persistent, weighted rules."
 readme = "README.md"
 license = "MIT"
@@ -53,11 +53,11 @@ claude-code = "dbnt.adapters.claude_code:ClaudeCodeAdapter"
 generic = "dbnt.adapters.generic:GenericAdapter"
 
 [project.urls]
-Homepage = "https://github.com/idirectships/dbnt"
-Repository = "https://github.com/idirectships/dbnt"
-Documentation = "https://github.com/idirectships/dbnt#readme"
-Issues = "https://github.com/idirectships/dbnt/issues"
-Changelog = "https://github.com/idirectships/dbnt/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Garman-Unified-Systems/dbnt"
+Repository = "https://github.com/Garman-Unified-Systems/dbnt"
+Documentation = "https://github.com/Garman-Unified-Systems/dbnt#readme"
+Issues = "https://github.com/Garman-Unified-Systems/dbnt/issues"
+Changelog = "https://github.com/Garman-Unified-Systems/dbnt/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

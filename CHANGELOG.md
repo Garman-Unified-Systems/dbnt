@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-13
+### Added
+- Capture → Compound → Mine taxonomy documented in README and skills
+- `skills/dbnt-feedback/SKILL.md` updated to unified 4-mode DBNT x ABCD structure (capture, compound, mine, disposition)
+- `$DBNT_DIR` configurable artifact root made prominent in README and skill
+- Pointer to public garman-skills publication of the dbnt-x-abcd skill
+- ABCD disposition check mode documented
+
 ## [0.5.3] - 2026-07-02
 ### Fixed
 - `lastrowid` null-safety in `LearningStore.add()` — returns `-1` instead of `None` on insert failure
