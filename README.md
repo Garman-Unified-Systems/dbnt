@@ -31,7 +31,7 @@ That is what DBNT implements.
 
 | Dimension | Unstructured Feedback | DBNT Protocol |
 |-----------|----------------------|---------------|
-| Signal clarity | Ambiguous ("hmm, try again") | Severity-graded (DB/DBN/DBNM/DBYC) |
+| Signal clarity | Ambiguous ("hmm, try again") | Auto-classified from natural language — severity inferred from context |
 | Persistence | Lost at session boundary | Encoded as rules, survives indefinitely |
 | Success handling | Ignored or undifferentiated | Weighted 1.5x, separately tracked |
 | Failure handling | Vague disapproval | Categorized, pattern-detected, auto-promoted |
@@ -47,8 +47,8 @@ Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*,
 
 Five subsystems, one goal — agents that get better over time:
 
-- **Protocol Engine** — Escalating correction commands (DB → DBN → DBNM → DBYC) with point scoring and structured action routing
-- **Signal Detection** — Classifies natural language feedback without requiring special syntax. "That's not quite right" is as valid as `dbn`
+- **Protocol Engine** — Auto-classifies natural language feedback into weighted signals. "That was wrong", "do better", "that worked perfectly" all route correctly without any special syntax.
+- **Signal Detection** — Infers success vs failure, severity, and scope from context. Explicit shorthands work as aliases but are never required.
 - **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
 - **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
 - **FSRS Decay Engine** — Rules that get applied grow stronger. Rules that sit unused fade toward archival. Based on the [FSRS-6 spaced-repetition algorithm](https://github.com/open-spaced-repetition/py-fsrs)
@@ -305,6 +305,40 @@ Auto-promoted from pattern after 3+ occurrences.
 ```
 
 Human-readable. Diffable. Version-controllable if you want.
+
+---
+
+## Capture → Compound → Mine
+
+The DBNT feedback loop has three phases beyond individual rule capture:
+
+### Phase 1: Capture
+
+Single-event encode — runs on every `db`/`dbn`/`dbnm`/`dbyc` correction or explicit rule request ("save this as a rule", "capture this pattern"). Produces a markdown artifact in `$DBNT_DIR/rules/successes/` or `failures/`.
+
+`DBNT_DIR` defaults to `~/.dbnt/`. Override for per-project isolation:
+
+```bash
+DBNT_DIR=./dbnt/ dbnt success "Used typed dataclass for config"
+```
+
+### Phase 2: Compound
+
+Cross-session pattern synthesis. Run when you notice related corrections clustering — "compound my learnings" or "what recurs across sessions". Groups artifacts with shared root causes into a compound pattern artifact at `$DBNT_DIR/rules/patterns/`. Three or more artifacts sharing a root class promote automatically.
+
+### Phase 3: Mine
+
+Root-cause classification. Run when you want the class picture — "mine recurrences" or "class the failures". Reports which failure classes keep recurring, ranked by frequency, with doctrine-gap analysis.
+
+### The ABCD disposition check
+
+At session end, run "did we live abcd" or "above and beyond". ABCD (Above and Beyond the Call of Duty) scores four criteria: above the ask, beyond the call, compounding output, doctrine-consistent. Any "no" triggers a capture artifact before the session closes.
+
+---
+
+### Claude Code skill
+
+Install the public skill in Claude Code via [garman-skills](https://github.com/idirectships/garman-skills). The `skills/dbnt-feedback/` skill in this repo, and the published `dbnt-x-abcd` skill in garman-skills, both wire the four modes above. The skill handles mode routing; the `dbnt` CLI handles storage and lifecycle.
 
 ---
 
