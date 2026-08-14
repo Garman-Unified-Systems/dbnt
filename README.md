@@ -308,7 +308,9 @@ Human-readable. Diffable. Version-controllable if you want.
 
 ---
 
-## Capture → Compound → Mine
+## Capture → Compound → Mine — GUSystems Skill Pack #1
+
+The DBNT x ABCD skill is the first entry in the GUSystems Skill Pack series — open-source, production-proven skills from Garman Unified Systems. Install the skill directly via [garman-skills](https://github.com/idirectships/garman-skills).
 
 The DBNT feedback loop has three phases beyond individual rule capture:
 
