@@ -1,41 +1,54 @@
 ---
 name: dbnt-feedback
-description: "DBNT x ABCD — capture, compound, mine, and disposition loop. ABCD notices what is worth learning; DBNT encodes it. Four modes by input shape: (1) capture — bare invocation, DB, DBYC, 'do better next time', 'save this as a rule', 'make this a rule', 'encode this lesson', 'write a failure artifact', 'capture this pattern'; (2) compound — 'compound my learnings', 'what patterns should become skills', 'turn learnings into rules', 'what keeps coming up across sessions', 'what recurs across our recent work'; (3) mine — 'mine recurrences', 'what keeps happening', 'root cause classes', 'class the failures'; (4) disposition — 'abcd', 'above and beyond', 'did we live abcd'."
+description: "Encode what happened, surface what recurs, and check how you showed up. Invoke with any natural feedback phrase — 'do better', 'do better next time', 'that was wrong', 'that worked well', 'capture this', 'save this as a rule', 'make this a rule', 'encode this lesson', 'write a failure artifact', 'capture this pattern', 'what keeps happening', 'what keeps coming up across sessions', 'what recurs across our recent work', 'turn learnings into rules', 'compound my learnings', 'what patterns should become skills', 'mine recurrences', 'root cause classes', 'class the failures', 'abcd', 'above and beyond', 'did we live abcd'. The skill reads context and classifies the action automatically."
 allowed-tools: [Write, Read, Bash, Grep, Glob]
 ---
 
 # DBNT x ABCD
 
-**One loop:** ABCD notices what is worth capturing; DBNT captures it, compounds it, and mines it to a class.
+**Give feedback. The skill does the rest.**
 
-**Loop spine:** surface doubt, weigh together, encode the trace.
-
----
-
-## Mode routing
-
-| Input | Mode |
-|---|---|
-| Bare invocation, DB, DBYC, "do better next time", "save/make/encode this as a rule", "write a failure artifact", "capture this pattern" | **capture** |
-| "compound my learnings", "what patterns should become skills", "turn learnings into rules", "what keeps coming up", "what recurs across sessions" | **compound** |
-| "mine recurrences", "what keeps happening", "root cause classes", "class the failures" | **mine** |
-| "abcd", "above and beyond", "did we live abcd" | **disposition** |
+ABCD notices what is worth capturing; DBNT encodes it, compounds it across sessions, and mines it to a class. The loop spine: surface doubt, weigh together, encode the trace.
 
 ---
 
-## MODE: capture
+## Auto-classification
+
+The skill reads context and selects its own mode. You never pick a command.
+
+**Single event** — feedback on one thing that just happened, one lesson from this session, or any phrase like "do better", "that was wrong", "that worked", "capture this":
+→ **capture mode**
+
+**Across sessions** — "what keeps coming up", "compound our learnings", "what should become a rule", patterns that span multiple past sessions:
+→ **compound mode**
+
+**Pattern classes** — "mine recurrences", "what keeps happening structurally", "root cause classes":
+→ **mine mode**
+
+**Disposition check** — "above and beyond", "abcd", "did we live it":
+→ **disposition mode**
+
+If the context is genuinely ambiguous between capture and compound, default to capture and note the compound signal for the next invocation.
+
+---
+
+## Capture mode
 
 Single-event encode — one lesson from one session or directive.
 
-**Artifact dir:** `$DBNT_DIR` (default: `~/.dbnt/`). Override per-project: `DBNT_DIR=./dbnt/`.
+**Artifact dir:** `$DBNT_DIR` (default: `~/.dbnt/`). Override per-project with `DBNT_DIR=./dbnt/`.
 
-**Artifact paths:**
-- Success: `$DBNT_DIR/rules/successes/<pattern-name>.md`
-- Failure: `$DBNT_DIR/rules/failures/<pattern-name>.md`
+**Paths:**
+- What worked: `$DBNT_DIR/rules/successes/<pattern-name>.md`
+- What failed: `$DBNT_DIR/rules/failures/<pattern-name>.md`
 
-### Success template
+**Auto-classify success vs failure from context.** The operator does not pick. Phrases like "that worked", "good pattern", "ship it" → success. Phrases like "that was wrong", "do better", "never again" → failure. Ambiguous → ask one question before writing.
 
-```
+**Severity is also inferred.** Incidental misses → standard. Repeated misses, high-cost errors, or explicit emphasis → critical (2x weight). A success path is weighted 1.5x over a failure path regardless of severity — a working route is rarer and more information-dense than a broken one.
+
+### Success artifact
+
+```markdown
 # Success: [Pattern Name]
 
 **Context**: [What was happening when this worked]
@@ -52,12 +65,12 @@ Single-event encode — one lesson from one session or directive.
 [Specific behavior to repeat]
 ```
 
-### Failure template (DBYC)
+### Failure artifact
 
-```
+```markdown
 # Failure: [What Went Wrong]
 
-**Severity**: CRITICAL
+**Severity**: [STANDARD | CRITICAL]
 **Context**: [What was happening]
 **Mistake**: [What went wrong]
 **Correction**: [What was learned]
@@ -70,79 +83,105 @@ Single-event encode — one lesson from one session or directive.
 [Specific behavior to avoid]
 ```
 
-### Signal weight
+---
 
-- DB success: 1x standard
-- DBYC success or failure: 2x critical
-- Success signals weight 1.5x over failure (success is more information-dense)
+## Compound mode
+
+Cross-session synthesis — what recurring patterns should become permanent skills, rules, or hooks?
+
+Every compound learning traces to a gap discovered in work. DBNT is the sole source of improvement.
+
+### Process
+
+1. **Gather** — read recent artifacts from `$DBNT_DIR/rules/`. Default window: last 7 days.
+2. **Extract** — pull `## Runtime Doctrine`, `## The Pattern`, `## Never Again` from each file.
+3. **Consolidate** — merge patterns expressing the same principle before counting. Three phrasings of the same lesson = one signal, not three.
+4. **Threshold** — 1 occurrence: note only. 2: present. 3+: recommend creation. 4+: create.
+5. **Categorize:**
+   - Sequence of steps? → SKILL
+   - Fires automatically on an event? → HOOK
+   - "When X, do Y" heuristic? → RULE
+   - Enhances existing workflow? → UPDATE
+6. **Propose** — show pattern name, signal count, artifact type, draft content, target path. Get approval before writing. Summarize what was created and what was skipped.
 
 ---
 
-## MODE: compound
+## Mine mode
 
-Cross-session pattern synthesis — what recurs across multiple captured artifacts?
+Cluster a window of events into root-cause classes. Classes fix the pattern; instance fixes leave the pattern intact.
 
-1. Read all files under `$DBNT_DIR/rules/successes/` and `$DBNT_DIR/rules/failures/`
-2. Group by theme: look for 3+ artifacts sharing a root cause or trigger pattern
-3. For each group: write a compound artifact to `$DBNT_DIR/rules/patterns/<theme-name>.md`
+Default window: last 7 days. An explicit argument overrides it; record the window in your output.
 
-### Compound artifact template
+### The six canonical classes
 
-```
-# Pattern: [Theme Name]
+| # | Class | Description |
+|---|---|---|
+| 1 | Unvalidated instrument | Checker never proven able to return the other answer on the object it judges |
+| 2 | Fixed the instance, not the class | Scope from the report, not a corpus sweep; closure allowed with known-open siblings |
+| 3 | Shipped is not running | merged != on-disk != registered != armed != invoked; last hop unmeasured |
+| 4 | Correction lands as prose or noise | A warn rule or doc substitutes for a mechanism |
+| 5 | Closure on an unprobed reference | verified-by is free text the closing author writes |
+| 6 | A denial is an obstacle, not a stop | Bypass classes added instead of one stop |
 
-**Frequency**: [N occurrences across sessions]
-**Source artifacts**: [list of contributing filenames]
-**Confidence**: [low / medium / high — 3+ = high]
+Class 2 is the meta-trap: this skill exists to prevent it.
 
-## Root Cause Class
-[The shared structural cause]
+### Steps
 
-## Runtime Doctrine
-[One compact instruction that covers the whole class]
-
-## Instances
-- [artifact 1]: [one-line summary]
-- [artifact 2]: [one-line summary]
-```
-
----
-
-## MODE: mine
-
-Root-cause classification — what classes of failure keep recurring?
-
-1. Read all failure artifacts and patterns from `$DBNT_DIR/rules/`
-2. Cluster by root cause (not surface symptom)
-3. Rank by frequency
-4. Report: class name, frequency, canonical example, doctrine gap (what doctrine would prevent recurrence)
-
-Output is a report to the session (not a written artifact) unless the operator says "write it" or "save it".
+1. Set and record the window.
+2. Gather corpus — receipts, handoffs, failure artifacts, open issues, reopened items.
+3. Classify each instance against the six classes in order; assign the first that fits. Hold genuinely unclassed instances (need 4+ before proposing class 7).
+4. Count and rank — table by count descending with a top exemplar per class.
+5. Name the encoding gap — what would close each class, and why has it not closed?
+6. Report — lead with total count, classes found, largest class.
 
 ---
 
-## MODE: disposition (ABCD check)
+## Disposition mode
 
-Did this session live the ABCD standard?
+ABCD is an agent lifestyle trait — default character, not a checklist step invoked at session end.
 
-**ABCD = Above and Beyond the Call of Duty** — the bar is not task completion, it is whether the session:
-- surfaced a concern the operator had not named
-- caught a mistake before it propagated
-- produced an artifact that will compound (not just complete) the work
-- held the line on a constraint even when it was inconvenient
+**Trait:** See adjacent blockages. CAPTURE without being told. Route to the right specialist. Ask smart before silent-stuck. Bounded by Duty.
 
-### Disposition check
+Duty bounds the trait: sealed allotments, governance hooks, custody gates.
 
-For each criterion, answer: yes / partial / no.
+### ABCD axes
 
-```
-A — Above the ask: did the session produce something beyond what was requested?
-B — Beyond the call: did it catch a risk the operator would not have caught?
-C — Compound: does the artifact enable future work, or is it terminal?
-D — Doctrine-consistent: did it hold all active constraints throughout?
-```
+| Axis | Behavior |
+|---|---|
+| **Above** | Do not stop at ticket-closed if one small step prevents rework |
+| **Beyond** | Fix the leak at the joint — do not lay new pipe |
+| **Call of Duty** | Stay inside the sealed allotment and stop condition |
+| **Duty** | Identity, governance hooks, custody boundaries, ToS |
 
-If any criterion is "no", write a capture artifact for the failure class before closing the session.
+### Ambient check (continuous, not end-of-task ritual)
+
+- What breaks next if I stop here?
+- Can downstream consume this without another hop?
+- Am I inventing or asking smart?
+
+### Decision table
+
+| Situation | Live ABCD? | Action |
+|---|---|---|
+| Work done, adjacent node blind | Yes | Mirror — do not wait to be told |
+| Handoff done, not indexed | Yes | CAPTURE without prompt |
+| PR open, CI green | Yes | Poll merge lane |
+| Blocked on gate or taste | No | Smart ask — not parallel invent |
+| New feature outside allotment | No | Smart ask or seal allotment first |
+
+### Anti-patterns
+
+Performative heroics, busywork, scope creep without allotment, gate bypass, invoke-only ABCD (reduces trait to checklist), unbounded polish past stop condition.
+
+---
+
+## The loop in full
+
+ABCD is the front half: notice what is worth capturing, surface doubt honestly, bring the adjacent thing to the table.
+
+DBNT is the back half: encode the talk-out trace so the same doubt never needs the same conversation twice. The artifact records the reasoning that resolved the issue — not just the mistake — so future encounters cite the resolution.
+
+The loop closes when the artifact enters the shared guidance surface and future sessions load it at equip time.
 
 ---
 
@@ -163,7 +202,7 @@ The store is portable and human-readable. Override `DBNT_DIR` for per-project is
 
 ## Public skill
 
-The public version of this skill is published at:
+The public version of this skill is also published at:
 [garman-skills/skills/dbnt-x-abcd](https://github.com/idirectships/garman-skills/tree/main/skills/dbnt-x-abcd)
 
 The underlying Python package (`pip install dbnt`) provides the CLI and API layer.

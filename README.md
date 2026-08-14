@@ -31,7 +31,7 @@ That is what DBNT implements.
 
 | Dimension | Unstructured Feedback | DBNT Protocol |
 |-----------|----------------------|---------------|
-| Signal clarity | Ambiguous ("hmm, try again") | Severity-graded (DB/DBN/DBNM/DBYC) |
+| Signal clarity | Ambiguous ("hmm, try again") | Auto-classified from natural language — severity inferred from context |
 | Persistence | Lost at session boundary | Encoded as rules, survives indefinitely |
 | Success handling | Ignored or undifferentiated | Weighted 1.5x, separately tracked |
 | Failure handling | Vague disapproval | Categorized, pattern-detected, auto-promoted |
@@ -47,8 +47,8 @@ Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*,
 
 Five subsystems, one goal — agents that get better over time:
 
-- **Protocol Engine** — Escalating correction commands (DB → DBN → DBNM → DBYC) with point scoring and structured action routing
-- **Signal Detection** — Classifies natural language feedback without requiring special syntax. "That's not quite right" is as valid as `dbn`
+- **Protocol Engine** — Auto-classifies natural language feedback into weighted signals. "That was wrong", "do better", "that worked perfectly" all route correctly without any special syntax.
+- **Signal Detection** — Infers success vs failure, severity, and scope from context. Explicit shorthands work as aliases but are never required.
 - **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
 - **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
 - **FSRS Decay Engine** — Rules that get applied grow stronger. Rules that sit unused fade toward archival. Based on the [FSRS-6 spaced-repetition algorithm](https://github.com/open-spaced-repetition/py-fsrs)
