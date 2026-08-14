@@ -83,6 +83,16 @@ Single-event encode — one lesson from one session or directive.
 [Specific behavior to avoid]
 ```
 
+After writing any artifact, the pipeline continues — do not stop here.
+
+**Route** — identify the domain that owns this pattern and hand the artifact to the teammate who owns that domain.
+
+**Recurrence check** — scan `$DBNT_DIR/rules/` for artifacts in the same class. If this event is a repeat, widen the existing class artifact's scope rather than writing a new entry. The class is the fix target; the instance is evidence.
+
+**Threshold** — count signals in this class across all artifacts. At 3+: surface a proposal (artifact type, draft content, target path). At 4+: create it without waiting.
+
+**Receipt** — close the chain: what was written, where it lives, what was proposed or created.
+
 ---
 
 ## Compound mode
@@ -175,13 +185,17 @@ Performative heroics, busywork, scope creep without allotment, gate bypass, invo
 
 ---
 
-## The loop in full
+## Full pipeline — any trigger
+
+Any ABCD or DBNT trigger fires the complete loop. Mode (capture/compound/mine/disposition) is the entry point, not the exit point; the chain runs forward from wherever you enter.
+
+**Classify → write artifact → route to owning domain → recurrence-check and widen → propose encoding at threshold → receipt the chain.**
 
 ABCD is the front half: notice what is worth capturing, surface doubt honestly, bring the adjacent thing to the table.
 
-DBNT is the back half: encode the talk-out trace so the same doubt never needs the same conversation twice. The artifact records the reasoning that resolved the issue — not just the mistake — so future encounters cite the resolution.
+DBNT is the back half: encode the trace, route it to the owning surface, check whether the class already exists and widen it, and surface the permanent encoding proposal when the threshold is crossed.
 
-The loop closes when the artifact enters the shared guidance surface and future sessions load it at equip time.
+The loop closes when: the artifact lives in the store, the owning domain has been routed the signal, the recurrence check has run, and the receipt names what was written and what was proposed.
 
 ---
 
