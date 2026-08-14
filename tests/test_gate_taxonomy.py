@@ -1,6 +1,5 @@
 """Test that gate.sh project taxonomy uses generic labels without internal project names."""
 import pathlib
-import re
 
 
 GATE_SH = pathlib.Path(__file__).parent.parent / "gate.sh"
