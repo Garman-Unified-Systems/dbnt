@@ -22,7 +22,8 @@ they are not assumed permanent.
 Only public repository content is in scope. Secrets, credentials, personal data,
 private repositories, local session records, and external knowledge stores are
 out of scope. MCP and subagents remain disabled until separate canaries prove
-their controls.
+their controls. The first pilot also removes shell execution from the worker;
+all checks are run by an independent verifier after the edit is returned.
 
 Every assignment names its owned files, acceptance criteria, time cap, stop
 conditions, and proof commands. Devin may prepare a reviewable change on a
@@ -31,9 +32,9 @@ queues.
 
 ## First pilot
 
-Invoke `/dbnt-cli-tests`. The skill may create only `tests/test_cli.py` and must
-stop before commit or push. A separate reviewer verifies the diff and reruns all
-checks against the current branch head.
+Invoke `/dbnt-cli-tests`. The skill may create only `tests/test_cli.py`, has no
+shell-execution tool, and must stop before commit or push. A separate reviewer
+verifies the diff and reruns all checks against the current branch head.
 
 ## Definition of done
 
