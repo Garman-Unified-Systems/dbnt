@@ -1,10 +1,10 @@
-"""Test that gate.sh project taxonomy uses generic labels without internal project names."""
+"""Test that gate.sh exposes only the generic public project taxonomy."""
 
 from pathlib import Path
 
 GATE_SH = Path(__file__).parent.parent / "gate.sh"
 
-NEW_LABELS = [
+GENERIC_PROJECT_TAXONOMY = (
     "proj-core",
     "proj-practice",
     "proj-tools",
@@ -15,33 +15,24 @@ NEW_LABELS = [
     "proj-reference",
     "proj-infra",
     "proj-archive",
-]
+)
 
-REMOVED_INTERNAL_NAMES = [
-    "proj-gus",
-    "proj-office-369",
-    "proj-abacus",
-    "proj-borussia",
-    "proj-splat",
-    "proj-finance",
-    "proj-straincellar",
-    "proj-abledumb",
-    "proj-familyrecipes",
-    "proj-sites",
-    "proj-research-kb",
-    "proj-substrate",
-]
+PROJECT_RULE_PREFIX = 'require_one_of "$project" "'
 
 
-def test_gate_taxonomy_uses_generic_labels():
-    """All new generic taxonomy labels must appear in gate.sh."""
-    content = GATE_SH.read_text()
-    for label in NEW_LABELS:
-        assert label in content, f"Expected generic label '{label}' in gate.sh"
+def _project_taxonomy_from_gate() -> tuple[str, ...]:
+    rules = [
+        line.strip()
+        for line in GATE_SH.read_text(encoding="utf-8").splitlines()
+        if line.strip().startswith(PROJECT_RULE_PREFIX)
+    ]
+    assert len(rules) == 1, "gate.sh must define exactly one project taxonomy rule"
+
+    rule = rules[0]
+    assert rule.endswith('"'), "project taxonomy rule must end with a quoted allowlist"
+    return tuple(rule[len(PROJECT_RULE_PREFIX) : -1].split())
 
 
-def test_gate_taxonomy_removes_internal_names():
-    """No internal project names may appear in gate.sh."""
-    content = GATE_SH.read_text()
-    for name in REMOVED_INTERNAL_NAMES:
-        assert name not in content, f"Internal project name '{name}' must not appear in gate.sh (public repo)"
+def test_gate_taxonomy_matches_generic_public_contract():
+    """The public gate must expose exactly the generic project allowlist."""
+    assert _project_taxonomy_from_gate() == GENERIC_PROJECT_TAXONOMY
