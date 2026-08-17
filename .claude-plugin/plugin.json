@@ -3,7 +3,7 @@
   "description": "Universal feedback protocol and learning system for AI agents. Turn corrections into persistent, weighted rules that survive across sessions.",
   "version": "0.6.0",
   "author": {
-    "name": "Dru Garman",
+    "name": "Drew Garman",
     "email": "drewgarman@gmail.com"
   },
   "homepage": "https://github.com/Garman-Unified-Systems/dbnt"
