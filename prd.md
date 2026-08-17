@@ -12,7 +12,7 @@ A universal feedback protocol that makes AI agents learn from human corrections 
 
 2. **AI power users** running tools like Claude Code daily who are tired of correcting the same behavior every session. They install via `pip install dbnt` + `dbnt install --adapter claude-code`. They care about: it just works, corrections stick, no configuration.
 
-3. **Multi-agent system builders** orchestrating multiple AI agents that need shared learning. They use DBNT's rule store as a swarm memory layer. They care about: cross-agent propagation, rule lifecycle, dissonance monitoring.
+3. **Multi-agent system builders** evaluating a common local rule format. DBNT 0.6.0 can point processes at one filesystem root, but transport, synchronization, concurrency control, and cross-node propagation remain host responsibilities.
 
 ## Success Criteria
 
@@ -21,7 +21,7 @@ A universal feedback protocol that makes AI agents learn from human corrections 
 | Repeat correction rate | <5% after 2 weeks of use | Same pattern encoded twice = repeat |
 | Rule store health | >60% success rules (weighted) | `dbnt dissonance` output |
 | Time to first value | <2 minutes | Install -> first rule encoded |
-| Stale rule ratio | <20% of active rules | `dbnt sweep` archive count vs total |
+| Stale rule candidate ratio | <20% of active rules | `dbnt sweep` report vs total; archival is an operator action |
 | PyPI installs | Growth month-over-month | PyPI download stats |
 
 ## Features
@@ -72,7 +72,7 @@ As a system, rules that get applied grow stronger and rules that sit unused fade
 **Acceptance criteria:**
 - [x] Retrievability formula: R(t,S) = (1 + t/(9*S))^(-1)
 - [x] Boost on application (rating=3)
-- [x] Sweep categorizes rules as healthy/review/archive
+- [x] Sweep reports rules as healthy/review/archive candidates
 - [x] Archive threshold at 0.3 retrievability
 - [x] Stability and difficulty tracking per rule
 
@@ -145,5 +145,6 @@ As a user, I can check if my rule store is anxiety-driven (too many failure rule
 | v0.2.0 | 2026-01-06 | Adapters, dissonance, rule categories |
 | v0.5.0 | 2026-03-15 | FSRS decay, pattern promotion, transcript extraction, CI |
 | v0.5.2 | 2026-03-20 | Performance cap, dedup, contamination filter |
-| v0.6.0 | TBD | LangChain adapter, MCP server adapter |
-| v1.0.0 | TBD | Stable API, multi-agent rule propagation |
+| v0.6.0 | 2026 | Shared `DBNT_DIR` state-root contract, robustness fixes, truthful package/release gates |
+| v0.7.0 | TBD | Adapter expansion after compatibility review |
+| v1.0.0 | TBD | Stable API; multi-agent propagation remains a separately scoped design |

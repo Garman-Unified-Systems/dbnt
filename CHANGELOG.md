@@ -7,13 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-08-13
+### 0.6.0 release candidate
+
 ### Added
-- Capture → Compound → Mine taxonomy documented in README and skills
-- `skills/dbnt-feedback/SKILL.md` updated to unified 4-mode DBNT x ABCD structure (capture, compound, mine, disposition)
-- `$DBNT_DIR` configurable artifact root made prominent in README and skill
-- Pointer to public garman-skills publication of the dbnt-x-abcd skill
-- ABCD disposition check mode documented
+- One state-root resolver used by rule storage, learning storage, protocol state,
+  generic and Claude Code adapters, and generated hooks
+- `DBNT_DIR` support with the backwards-compatible `~/.dbnt` default
+- Release validation for source/metadata version agreement and exact `vX.Y.Z`
+  tag matching
+
+### Changed
+- PyPI publication is tag-only; the build must pass tests, version validation,
+  distribution metadata checks, and artifact validation before trusted publishing
+- Documentation now distinguishes package behavior from the separately versioned
+  DBNT x ABCD skill and labels multi-agent propagation as roadmap work
+- `dbnt sweep` is documented as a report-only operation; it does not archive files
+
+### Fixed
+- Claude Code hooks and canonical package stores now honor `DBNT_DIR`; the
+  adapter's existing `~/.claude/rules` host mirror remains compatible
+- Generated and source-plugin hooks emit Claude Code's supported allow schema
+- Corrupt score state is quarantined before a clean state is created
+- Public category choices reject invalid success/failure taxonomies
+
+### Deferred
+- Bounded agency and expanded integration surfaces remain outside 0.6.0 and
+  require separate compatibility review
 
 ## [0.5.3] - 2026-07-02
 ### Fixed

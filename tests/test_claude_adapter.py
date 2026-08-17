@@ -17,3 +17,16 @@ def test_protocol_hook_quarantines_corrupt_score(tmp_path):
     assert '(.tweak_count // 0) | type == "number"' in hook
     assert 'all(.[]; type == "object"' in hook
     assert 'TMP_SCORE="${SCORE_FILE}.$$.tmp"' in hook
+
+
+def test_generated_hooks_emit_supported_allow_schema(tmp_path):
+    adapter = ClaudeCodeAdapter(claude_dir=tmp_path)
+    adapter.hooks_dir.mkdir(parents=True)
+
+    adapter._install_protocol_hook()
+    adapter._install_learning_hook()
+
+    for name in ("dbnt-protocol.sh", "dbnt-learn.sh"):
+        hook = (tmp_path / "hooks" / name).read_text()
+        assert '{"continue":true}' in hook
+        assert '{"result":"continue"}' not in hook

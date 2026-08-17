@@ -5,7 +5,7 @@ Thanks for your interest in making AI systems learn better.
 ## Development Setup
 
 ```bash
-git clone https://github.com/idirectships/dbnt
+git clone https://github.com/Garman-Unified-Systems/dbnt
 cd dbnt
 uv venv
 source .venv/bin/activate
@@ -113,20 +113,31 @@ scoped to this exact repo/workflow/environment combination.
 
 ### Cutting a release
 
-1. Bump `version` in `pyproject.toml` (also update `CHANGELOG.md`).
-2. Merge to `main`.
-3. Tag the release commit and push the tag:
+1. Bump `version` in `pyproject.toml` and `src/dbnt/__init__.py`; update
+   `CHANGELOG.md`.
+2. Run the release candidate gates locally:
    ```bash
-   git tag v0.5.3
-   git push origin v0.5.3
+   python scripts/validate_release.py
+   python -m pytest
+   ruff check src tests scripts
+   python -m build
+   twine check dist/*
    ```
-4. The `.github/workflows/publish.yml` workflow builds the sdist/wheel and
+3. Merge the reviewed release PR to `main` and wait for required CI checks.
+4. Tag that exact release commit and push an exact stable SemVer tag:
+   ```bash
+   git tag v0.6.0
+   git push origin v0.6.0
+   ```
+5. The `.github/workflows/publish.yml` workflow validates the tag against the
+   package version, builds and checks the sdist/wheel, and
    publishes them to PyPI automatically. Watch the run under the repo's
    Actions tab; the `publish` job requires the `pypi` GitHub Environment
    (see one-time setup above) to be configured before it will succeed.
 
-You can also trigger the workflow manually via `workflow_dispatch` from the
-Actions tab for a re-run against an existing tag.
+Production publication cannot be started with `workflow_dispatch`. A failed
+release must be diagnosed without moving or reusing the tag; prepare a new
+version when the released artifact would change.
 
 ## Questions?
 
