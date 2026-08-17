@@ -2,10 +2,15 @@
 
 > Universal feedback protocol and learning system for AI agents. Turn corrections into persistent, weighted rules that survive across sessions.
 
-[![Tests](https://github.com/idirectships/dbnt/actions/workflows/ci.yml/badge.svg)](https://github.com/idirectships/dbnt/actions)
+[![Tests](https://github.com/Garman-Unified-Systems/dbnt/actions/workflows/ci.yml/badge.svg)](https://github.com/Garman-Unified-Systems/dbnt/actions)
 [![PyPI version](https://badge.fury.io/py/dbnt.svg)](https://pypi.org/project/dbnt/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+
+**Release status:** this source revision declares `0.6.0` as a release
+candidate. The PyPI badge above reports the live published package; a source
+version is not a publication claim. The DBNT x ABCD skill has its own release
+rail and version.
 
 ---
 
@@ -20,7 +25,7 @@ pip install dbnt
 
 **Development install** (requires Python 3.10+, use a venv if on a managed system):
 ```bash
-git clone https://github.com/idirectships/dbnt
+git clone https://github.com/Garman-Unified-Systems/dbnt
 cd dbnt
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"
 ```
@@ -50,7 +55,7 @@ dbnt success "Use bun not npm" -c code -x "Project standard"
 # Encode what failed
 dbnt failure "Pushed directly to main" -c protocol -x "Always use feature branches"
 
-# Run the decay sweep — archives stale rules, boosts active ones
+# Report current decay categories (this does not move or delete files)
 dbnt sweep
 
 # Full system view
@@ -125,13 +130,13 @@ That is what DBNT implements.
 
 | Dimension | Unstructured Feedback | DBNT Protocol |
 |-----------|----------------------|---------------|
-| Signal clarity | Ambiguous ("hmm, try again") | Auto-classified from natural language — severity inferred from context |
+| Signal clarity | Ambiguous ("hmm, try again") | Explicit protocol commands plus natural-language signal classification |
 | Persistence | Lost at session boundary | Encoded as rules, survives indefinitely |
 | Success handling | Ignored or undifferentiated | Weighted 1.5x, separately tracked |
-| Failure handling | Vague disapproval | Categorized, pattern-detected, auto-promoted |
-| Content fabrication defense | None | Signal detection catches drift; corrections encode immediately |
-| Learning lifecycle | Accumulates without pruning | FSRS-6 decay — stale rules archive, active rules strengthen |
-| Multi-agent readiness | N/A | Shared rule stores, cross-agent propagation |
+| Failure handling | Vague disapproval | Categorized; eligible learning groups promote only when an operator runs `dbnt promote` |
+| Content fabrication defense | None | Corrections can be captured as durable local rules |
+| Learning lifecycle | Accumulates without review | FSRS-inspired health classification and explicit boost operations |
+| Multi-agent readiness | N/A | A shared filesystem root can be configured; synchronization is external |
 
 Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*, encoding *what right looks like*, and managing those learnings over time — that scales.
 
@@ -141,11 +146,11 @@ Telling an AI "that's wrong" doesn't scale. Telling it *what severity of wrong*,
 
 Five subsystems, one goal — agents that get better over time:
 
-- **Protocol Engine** — Auto-classifies natural language feedback into weighted signals. "That was wrong", "do better", "that worked perfectly" all route correctly without any special syntax.
-- **Signal Detection** — Infers success vs failure, severity, and scope from context. Explicit shorthands work as aliases but are never required.
+- **Protocol Engine** — Recognizes the explicit `db`, `dbn`, `dbnm`, `dbyc`, `fixed`, and `tweak` commands and records their score events.
+- **Signal Detection** — Classifies common natural-language phrases by polarity, strength, and weight. The CLI reports the classification; callers decide whether to encode it.
 - **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
-- **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
-- **FSRS Decay Engine** — Rules that get applied grow stronger. Rules that sit unused fade toward archival. Based on the [FSRS-6 spaced-repetition algorithm](https://github.com/open-spaced-repetition/py-fsrs)
+- **Learning System** — `dbnt patterns` reports similar learning groups. An eligible group becomes a rule only when an operator runs `dbnt promote`.
+- **FSRS-inspired Decay Engine** — Explicit reviews and boosts update stability; `dbnt sweep` reports healthy, review, and archive candidates without moving files.
 
 ---
 
@@ -168,42 +173,41 @@ DBNT is designed for developers who've moved past basic AI chat. Here's how the 
 
 ### Level 1: Single Agent Feedback Loop
 
-Wire DBNT into your AI tool. Every mistake your agent makes, every correction you give, gets encoded as a rule. The next session, that rule is injected back into context. The agent stops repeating itself.
+Wire DBNT into your AI tool and explicitly encode corrections worth retaining. DBNT persists those rules locally; your adapter or host application is responsible for loading relevant rules into later prompts.
 
 - Install DBNT, run `dbnt install --adapter claude-code` (or `--adapter generic`)
-- Agent makes a mistake → you say "not quite" → signal detected → rule encoded
-- Next session: rule is loaded, mistake doesn't recur
+- Use `dbnt detect` to classify natural-language feedback, then `dbnt success` or `dbnt failure` to persist the lesson
+- In a later session, have your host read the rule files from the configured state directory
 
-This alone significantly reduces repeat errors by making every failure a teachable moment the agent encodes immediately.
+This gives the host a durable rule source; measuring whether repeat errors fall remains the host's responsibility.
 
 ### Level 2: Persistent Rules with Lifecycle Management
 
-Rules accumulate. Without management, you end up with hundreds of stale files that slow context loading and contradict each other. FSRS-6 handles this automatically.
+Rules accumulate. Without review, you can end up with stale files that slow context loading and contradict each other. DBNT supplies decay state and a classification report; the operator controls archival.
 
-- Frequently-applied rules gain stability — they're harder to decay
-- Unused rules fade — `dbnt sweep` archives them
-- `dbnt dissonance` surfaces conflicting rules before they cause issues
+- Explicit `DecayEngine.boost` calls increase stability
+- Reviewed rules change stability; `dbnt sweep` reports candidates but does not archive them
+- `dbnt dissonance` reports aggregate success/failure balance; it does not compare rule content or detect conflicts
 
-The rule store stays lean. Only actively relevant rules survive.
+The report gives an operator or host application evidence to review or archive rules. DBNT 0.6.0 does not mutate rule files during a sweep.
 
-### Level 3: Skill Improvement Through Pattern Promotion
+### Level 3: Explicit Pattern Promotion
 
-When you correct the same class of mistake three or more times, DBNT detects the pattern and auto-promotes it to a permanent, high-confidence rule. Individual learnings become structural improvements.
+When the learning store contains three or more similar entries, `dbnt patterns` can report the eligible group. A rule is written only when an operator runs `dbnt promote`.
 
-- Similar corrections cluster automatically
-- Promotion threshold: 3+ occurrences with pattern confidence
-- Skills versioned: `code-review v1 → v2 → v3`
-- Rollback available if a new version performs worse
+- `dbnt patterns` groups similar entries when invoked
+- `dbnt promote` applies the 3+ occurrence threshold and writes qualifying rules
+- The CLI creates and promotes rules; skill versioning and rollback are outside the package
 
-Your agent's behavior across a domain improves without manual rule-writing.
+Promotion is explicit and operator-triggered; DBNT does not claim that the resulting rule is automatically loaded or changes agent behavior.
 
 ### Level 4: Multi-Agent Coordination (The Horizon)
 
-This is where DBNT becomes a swarm memory layer. The protocol and storage architecture already support it — shared rule stores, cross-agent learning propagation, probabilistic peer review between agents.
+DBNT can point multiple processes at the same `DBNT_DIR`, but 0.6.0 provides no transport, replication, locking protocol, cross-node propagation, or peer-review mechanism. Hosts that share a store must supply those operational controls.
 
-Agent A learns something. Agent B gets that learning without making the mistake itself. Agents critique each other's outputs. The swarm's collective rule base evolves.
+Multi-agent and cross-node propagation remain roadmap work rather than a 0.6.0 package capability.
 
-Level 4 is where this framework is heading. We run a production system across multiple nodes that uses DBNT as its learning substrate — agents coordinating autonomously, rules propagating across the network, skills compounding over time. The implementation details of that system aren't open source, but the foundation you'd build it on is exactly this.
+Level 4 is a possible integration direction. Treat the local filesystem and API in this release as building blocks, not as a distributed coordination system.
 
 ---
 
@@ -217,11 +221,11 @@ If you want transcript-based signal extraction (parsing conversation history for
 
 ### Bring Your Own Tools
 
-Adapters connect DBNT to whatever AI tooling you use. The Claude Code adapter hooks `UserPromptSubmit` and `Stop` events. The generic adapter uses filesystem watching and markdown files — it works with anything. Adding your own adapter is around 50 lines implementing a simple interface.
+Adapters connect DBNT to host tooling. The Claude Code adapter installs `UserPromptSubmit` and `Stop` hooks for score tracking and transcript extraction. The generic adapter creates the state directories and exposes rule synchronization methods; it does not run a filesystem watcher.
 
 ```bash
-dbnt install --adapter claude-code    # Installs to ~/.claude/hooks/ and ~/.claude/rules/
-dbnt install --adapter generic         # Installs to ~/.dbnt/rules/
+dbnt install --adapter claude-code    # Hooks/rule mirror in ~/.claude; state in $DBNT_DIR
+dbnt install --adapter generic         # Initializes $DBNT_DIR/rules/
 ```
 
 ### Bring Your Own Keys
@@ -241,11 +245,11 @@ The escalation ladder — each level signals increasing severity and triggers di
 | `dbnm` | Do Better Now Move — fix it and keep going | −1 | Fix + encode + don't stop to discuss |
 | `dbyc` | Critical — you had to take over | −2 | Encode BOTH the failure AND what worked |
 | `good` / `fixed` / `ship it` | Confirmed working | +3 | Acknowledge (1.5x weighted) |
-| `tweak` / `almost` | Close, iterate | +0.5 → −1 | Degrades on repetition |
+| `tweak` | Close, iterate | +0.5 → −1 | Degrades on repetition |
 
-The required response to any correction command is **"Yes Chef!"** — then fix, encode, continue. The kitchen protocol framing is intentional: corrections are instructions, not critiques.
+The protocol response text uses **"Yes Chef!"** and returns an action such as `encode_success` or `encode_both`. The caller remains responsible for performing the fix and invoking the encoding operation.
 
-`dbyc` is the most important signal. When a human has to step in and finish the work themselves, there are two learnings to capture: what the agent did wrong, and what the human did right. Both get encoded.
+`dbyc` returns `encode_both` because a takeover contains two useful learnings: what the agent did wrong and what the human did right. A host can use that action to persist both.
 
 ---
 
@@ -257,51 +261,50 @@ DBNT classifies feedback from natural language, so you don't need to remember co
 |-----------------|--------|--------|
 | "perfect", "ship it", "exactly right" | POSITIVE_STRONG | 1.5x |
 | "good", "that works", "correct" | POSITIVE_MODERATE | 1.2x |
-| "ok", "sure", "fine" | NEUTRAL | 1.0x |
 | "not quite", "close but", "almost" | NEGATIVE_MODERATE | 0.8x |
 | "wrong", "that's broken", "no" | NEGATIVE_STRONG | 1.0x (encode failure) |
 | "i had to fix this myself" | CRITICAL | 2.0x (encode both) |
 
-Silence is treated as neutral approval. The system doesn't require active positive feedback to function — only corrections.
+No event is recorded for silence. Neutral phrases are classified when they are explicitly passed to the signal detector.
 
 ---
 
 ## State Directory
 
-All DBNT state lives in `~/.dbnt/`:
+All DBNT state uses one root. It defaults to `~/.dbnt/`; set `DBNT_DIR` to a non-empty path for project-local or externally managed storage:
 
 ```
 ~/.dbnt/
 ├── rules/
 │   ├── successes/     # What worked — 1.5x weighted
 │   ├── failures/      # What failed — 1.0x weighted
-│   └── patterns/      # Auto-promoted from recurring learnings
 ├── learnings.db       # SQLite — pattern detection, decay tracking
 └── score.json         # Running score history
 ```
 
-The `~/.dbnt/` directory is portable. Copy it to a new machine, run `dbnt status`, and the full history is there.
+The state directory is portable as a unit. `DBNT_DIR` is read by the CLI, Python stores, protocol engine, adapters, and generated hooks. Explicit Python constructor paths take precedence over the environment.
 
-A rule file looks like this:
+A rule created by `dbnt success` looks like this:
 
 ```markdown
----
-id: rule_timezone_2024_abc1
-category: code
-weight: 1.5
-stability: 4.2
-retrievability: 0.87
-created: 2024-11-03
-last_applied: 2024-11-14
----
+# Success: Used timezone-aware datetimes
 
-# Always Use Timezone-Aware Datetimes
-
-Always use timezone-aware datetime objects. Store in UTC, display in local time.
+**Category**: code
+**Weight**: 1.5
+**Created**: 2026-08-16
+**Source**: unknown
 
 ## Context
-Three separate corrections on datetime handling across different projects.
-Auto-promoted from pattern after 3+ occurrences.
+
+Project stores timestamps across time zones.
+
+## Pattern
+
+Use timezone-aware datetime objects. Store in UTC, display in local time.
+
+## When to Apply
+
+[Auto-generated - edit as needed]
 ```
 
 Human-readable. Diffable. Version-controllable if you want.
@@ -310,37 +313,37 @@ Human-readable. Diffable. Version-controllable if you want.
 
 ## Capture → Compound → Mine — GUSystems Skill Pack #1
 
-The DBNT x ABCD skill is the first entry in the GUSystems Skill Pack series — open-source, production-proven skills from Garman Unified Systems. Install the skill directly via [garman-skills](https://github.com/idirectships/garman-skills).
+The repository includes a source-tree reference skill under `skills/dbnt-feedback/`. It is instruction content for compatible agent hosts, not part of the PyPI wheel and not an automatic extension of the CLI. A separately versioned public skill is being prepared in [garman-skills](https://github.com/idirectships/garman-skills); install and release it independently.
 
 The DBNT feedback loop has three phases beyond individual rule capture:
 
 ### Phase 1: Capture
 
-Single-event encode — runs on every `db`/`dbn`/`dbnm`/`dbyc` correction or explicit rule request ("save this as a rule", "capture this pattern"). Produces a markdown artifact in `$DBNT_DIR/rules/successes/` or `failures/`.
+In the reference skill, capture mode instructs the host agent to turn a correction or explicit rule request into a markdown artifact under `$DBNT_DIR/rules/successes/` or `failures/`. The package's `dbnt process` command returns an encode action; it does not write a rule until the caller or operator invokes the encoding API/CLI.
 
 `DBNT_DIR` defaults to `~/.dbnt/`. Override for per-project isolation:
 
 ```bash
-DBNT_DIR=./dbnt/ dbnt success "Used typed dataclass for config"
+DBNT_DIR=./dbnt dbnt success "Used typed dataclass for config" -c code
 ```
 
 ### Phase 2: Compound
 
-Cross-session pattern synthesis. Run when you notice related corrections clustering — "compound my learnings" or "what recurs across sessions". Groups artifacts with shared root causes into a compound pattern artifact at `$DBNT_DIR/rules/patterns/`. Three or more artifacts sharing a root class promote automatically.
+The package's `dbnt patterns` command groups similar unpromoted rows in `learnings.db`; `dbnt promote` turns groups of three or more into ordinary success or failure rule files. The richer "compound" workflow described by the reference skill is agent instruction content, not a CLI command.
 
 ### Phase 3: Mine
 
-Root-cause classification. Run when you want the class picture — "mine recurrences" or "class the failures". Reports which failure classes keep recurring, ranked by frequency, with doctrine-gap analysis.
+The reference skill describes a human/agent-guided root-cause review. DBNT 0.6.0 has no `mine` CLI command or canonical-class report.
 
 ### The ABCD disposition check
 
-At session end, run "did we live abcd" or "above and beyond". ABCD (Above and Beyond the Call of Duty) scores four criteria: above the ask, beyond the call, compounding output, doctrine-consistent. Any "no" triggers a capture artifact before the session closes.
+ABCD disposition is defined by the separately versioned skill. It is not evaluated or written automatically by the Python package.
 
 ---
 
 ### Claude Code skill
 
-Install the public skill in Claude Code via [garman-skills](https://github.com/idirectships/garman-skills). The `skills/dbnt-feedback/` skill in this repo, and the published `dbnt-x-abcd` skill in garman-skills, both wire the four modes above. The skill handles mode routing; the `dbnt` CLI handles storage and lifecycle.
+The source-tree reference and the separately versioned skill may instruct an agent to use DBNT artifacts, but neither is bundled in `pip install dbnt`. The package owns the CLI, Python API, state layout, scoring, pattern grouping, promotion, and decay classification. The skill owns agent-facing routing and disposition instructions.
 
 ---
 
@@ -352,9 +355,9 @@ Rules use the FSRS retrievability formula:
 R(t, S) = (1 + t / (9 × S))^(-1)
 ```
 
-Where `t` = days since last application, `S` = stability score. Apply a rule → stability increases, slower decay. Ignore a rule → retrievability drops toward the archival threshold.
+Where `t` = days since the recorded review and `S` = stability. An explicit boost increases stability. New rules without a decay review remain healthy; this release does not infer applications from rule-file access.
 
-This prevents the rule store from bloating with stale context that hurts more than it helps.
+`dbnt sweep` classifies rule IDs and prints candidates. It never deletes, moves, or archives rule files.
 
 ---
 
@@ -377,7 +380,7 @@ dbnt learn "Always validate at boundaries" -d code -i 3
 dbnt patterns                     # Show recurring patterns (caps at 200 learnings)
 dbnt patterns --limit 500         # Scan more learnings (slower on large stores)
 dbnt promote                      # Auto-promote qualifying patterns to rules
-dbnt sweep                        # Run FSRS decay check — archives stale rules
+dbnt sweep                        # Report FSRS-inspired decay categories
 
 # Status
 dbnt status                       # Full system overview
@@ -398,8 +401,8 @@ dbnt uninstall                         # Remove hooks
 
 | Adapter | Status | Description |
 |---------|--------|-------------|
-| Claude Code | Stable | Hooks `UserPromptSubmit` + `Stop`, injects rules into context |
-| Generic | Stable | File-based, filesystem events — works with any tool |
+| Claude Code | Beta | Installs hooks, keeps the existing `~/.claude/rules` sync target, and stores score/learnings under `$DBNT_DIR`; no rule injection |
+| Generic | Stable | Creates directories and provides file-based rule synchronization methods |
 | LangChain | Planned | Callback handler on chain completion |
 | CrewAI | Planned | Task completion hook |
 | AutoGen | Planned | Agent feedback loop integration |
@@ -430,10 +433,10 @@ Human feedback
                                 ▼
                     FSRS-6 Decay Engine
                     ├─ Applied? ──► Boost stability
-                    └─ Unused?  ──► Fade → archive
+                    └─ Sweep ─────► Report review/archive candidates
 ```
 
-No middleware. No cloud calls. The signal goes in, the rule comes out, the agent gets better.
+No middleware, cloud calls, or telemetry. Signals and protocol commands produce structured results; explicit encode operations persist rules.
 
 ---
 
@@ -448,14 +451,14 @@ No middleware. No cloud calls. The signal goes in, the rule comes out, the agent
 | LLM-agnostic | Yes | Yes | Usually not |
 | Local-first | Yes | Varies | Usually cloud |
 | Zero cloud dependencies | Yes | Varies | Heavy |
-| Pattern auto-promotion | Yes | No | No |
-| Multi-agent ready | Yes (shared store) | No | Partial |
+| Pattern auto-promotion | Yes, from learning rows | No | No |
+| Distributed propagation | No | No | Varies |
 
 ---
 
 ## Contributing
 
-Issues, PRs, and discussion welcome on [GitHub](https://github.com/idirectships/dbnt).
+Issues, PRs, and discussion welcome on [GitHub](https://github.com/Garman-Unified-Systems/dbnt).
 
 What we accept without prior discussion:
 - New adapter implementations
@@ -478,11 +481,7 @@ MIT
 
 ## What's Next
 
-DBNT is a foundation layer, not a finished product. A single agent with persistent memory is useful. An agent whose skills compound over weeks of corrections is more useful. A network of agents sharing a rule store and improving collectively is something else entirely.
-
-We run a production system built on this foundation — multiple nodes coordinating autonomously, rules propagating across agents, skills versioning and rolling back based on performance signals. That system isn't open source. But the protocol it runs on is exactly what you're installing.
-
-Start at Level 1. Wire it into your current setup. Watch the correction rate drop over a few weeks. Then decide how far you want to take it.
+DBNT 0.6.0 is a local feedback and rule-lifecycle toolkit. Distributed propagation, skill versioning, rollback, automatic rule injection, and autonomous archival remain outside this release. Start with one state root, measure the correction loop, and add host integration deliberately.
 
 ---
 

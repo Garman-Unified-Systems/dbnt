@@ -81,7 +81,7 @@ class ScoreState:
 
 **Success rate** = events with positive points / (positive + negative events). Target: 98%+.
 
-**Persistence:** JSON at `~/.dbnt/score.json`. Legacy migration handles `delta` -> `points` key rename transparently.
+**Persistence:** JSON at `$DBNT_DIR/score.json` (default root `~/.dbnt`). Legacy migration handles `delta` -> `points` key rename transparently.
 
 ## Data Structures
 
@@ -291,7 +291,7 @@ Entry points registered in `pyproject.toml` under `[project.entry-points."dbnt.a
 |-----------|--------|------------|
 | Command detection | <1ms | Regex match on short text |
 | Signal detection | <1ms | Regex match on short text |
-| Rule encoding | <10ms | File write to ~/.dbnt/ |
+| Rule encoding | <10ms | File write to `$DBNT_DIR/` (default `~/.dbnt/`) |
 | Pattern detection (200 learnings) | <3s | SequenceMatcher pairwise |
 | Pattern detection (500 learnings) | <15s | User-requested via --limit |
 | Score state load/save | <5ms | JSON parse/serialize |
@@ -300,8 +300,8 @@ Entry points registered in `pyproject.toml` under `[project.entry-points."dbnt.a
 ## Security Model
 
 - **Authentication:** None. Local library, local state.
-- **Authorization:** Filesystem permissions on `~/.dbnt/`. User-owned.
-- **Data classification:** PUBLIC. No PII, no credentials, no sensitive data in rules.
+- **Authorization:** Filesystem permissions on `$DBNT_DIR` (default `~/.dbnt/`). User-owned.
+- **Data classification:** Caller-controlled. Rules and transcripts may contain sensitive data; choose `DBNT_DIR` permissions and custody accordingly.
 - **Encryption:** None needed. Local files, no network transmission.
 - **Network:** Zero outbound calls in core. Ollama extraction is opt-in and local (127.0.0.1:11434).
 
@@ -311,7 +311,7 @@ Entry points registered in `pyproject.toml` under `[project.entry-points."dbnt.a
 |---------|-----------|----------|
 | Corrupt score.json | JSONDecodeError on load | Fresh ScoreState (zero points, no events) |
 | Corrupt learnings.db | sqlite3.Error on connect | Manual: delete and re-extract |
-| Missing ~/.dbnt/ | Directory not found | Auto-created on first write |
+| Missing state root | Directory not found | `$DBNT_DIR` (or default) is created on first write |
 | Ollama unavailable | URLError / TimeoutError | Fallback to regex extraction |
 | O(n^2) timeout on large stores | User sees >3s delay | Auto-cap at 200 learnings, --limit flag |
 | Contamination in learnings | System-prompt text stored | Contamination filter rejects known patterns |

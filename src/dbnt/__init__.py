@@ -24,6 +24,7 @@ from dbnt.extract import (
 from dbnt.learning import DecayEngine, DecayState, LearningStore, PatternDetector
 from dbnt.protocol import Action, Command, Protocol, ProtocolResponse
 from dbnt.signals.detector import Signal, SignalStrength, SignalType, detect_signal
+from dbnt.state import resolve_state_root
 
 __version__ = "0.6.0"
 __all__ = [
@@ -57,4 +58,6 @@ __all__ = [
     "Signal",
     "SignalType",
     "SignalStrength",
+    # State
+    "resolve_state_root",
 ]

@@ -6,6 +6,7 @@ from typing import Any
 
 from dbnt.adapters.base import BaseAdapter
 from dbnt.core import Rule, RuleType
+from dbnt.state import resolve_state_root
 
 
 class ClaudeCodeAdapter(BaseAdapter):
@@ -21,6 +22,9 @@ class ClaudeCodeAdapter(BaseAdapter):
 
     def __init__(self, claude_dir: Path | None = None):
         self.claude_dir = claude_dir or Path.home() / ".claude"
+        self.state_dir = resolve_state_root()
+        # Preserve the adapter's host-facing mirror for backwards compatibility.
+        # Canonical DBNT score/learning state is resolved through self.state_dir.
         self.rules_dir = self.claude_dir / "rules"
         self.successes_dir = self.rules_dir / "successes"
         self.failures_dir = self.rules_dir / "failures"
@@ -113,7 +117,7 @@ set -euo pipefail
 
 INPUT=$(cat)
 MESSAGE=$(echo "$INPUT" | jq -r '.user_prompt // .prompt // ""' 2>/dev/null || echo "")
-[ -z "$MESSAGE" ] && echo '{"result":"continue"}' && exit 0
+[ -z "$MESSAGE" ] && echo '{"continue":true}' && exit 0
 
 # Normalize
 MSG_LOWER=$(echo "$MESSAGE" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//')
@@ -135,10 +139,10 @@ elif echo "$MSG_LOWER" | /usr/bin/grep -qE "^tweak(\\s|$|[.!])"; then
     CMD="TWEAK"; POINTS=0
 fi
 
-[ -z "$CMD" ] && echo '{"result":"continue"}' && exit 0
+[ -z "$CMD" ] && echo '{"continue":true}' && exit 0
 
 # Log to score file
-SCORE_DIR="$HOME/.dbnt"
+SCORE_DIR="${DBNT_DIR:-$HOME/.dbnt}"
 mkdir -p "$SCORE_DIR"
 SCORE_FILE="$SCORE_DIR/score.json"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -180,12 +184,12 @@ EVENT="{\\"command\\":\\"$(echo $CMD | tr '[:upper:]' '[:lower:]')\\",\\"points\
 TMP_SCORE="${SCORE_FILE}.$$.tmp"
 if ! jq --argjson evt "$EVENT" '.total_points = '"$NEW_TOTAL"' | .events += [$evt] | .last_updated = "'"$TIMESTAMP"'"' "$SCORE_FILE" > "$TMP_SCORE"; then
     rm -f "$TMP_SCORE"
-    echo '{"result":"continue"}'
+    echo '{"continue":true}'
     exit 0
 fi
 mv "$TMP_SCORE" "$SCORE_FILE"
 
-echo '{"result":"continue"}'
+echo '{"continue":true}'
 exit 0
 ''')
         hook.chmod(0o755)
@@ -200,7 +204,7 @@ exit 0
         hook.write_text('''\
 #!/usr/bin/env bash
 # DBNT Learning Extraction Hook (Stop)
-# Extracts learnings from session transcript, stores in ~/.dbnt/learnings.db
+# Extracts learnings from session transcript, stores in $DBNT_DIR/learnings.db
 
 set -euo pipefail
 
@@ -208,10 +212,11 @@ INPUT=$(cat)
 TRANSCRIPT_PATH=$(echo "$INPUT" | jq -r '.transcript_path // ""' 2>/dev/null || echo "")
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || echo "")
 
-[ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ] && echo '{"result":"continue"}' && exit 0
+[ -z "$TRANSCRIPT_PATH" ] || [ ! -f "$TRANSCRIPT_PATH" ] && echo '{"continue":true}' && exit 0
 
 # Find python with dbnt installed
 PYTHON=""
+DBNT_STATE_DIR="${DBNT_DIR:-$HOME/.dbnt}"
 for p in python3 python; do
     if command -v "$p" >/dev/null 2>&1 && "$p" -c "import dbnt" 2>/dev/null; then
         PYTHON="$p"
@@ -221,7 +226,7 @@ done
 
 # Check common venv locations
 if [ -z "$PYTHON" ]; then
-    for venv in "$HOME/.dbnt/.venv/bin/python" "$HOME/.local/bin/python3"; do
+    for venv in "$DBNT_STATE_DIR/.venv/bin/python" "$HOME/.local/bin/python3"; do
         if [ -x "$venv" ] && "$venv" -c "import dbnt" 2>/dev/null; then
             PYTHON="$venv"
             break
@@ -229,7 +234,7 @@ if [ -z "$PYTHON" ]; then
     done
 fi
 
-[ -z "$PYTHON" ] && echo '{"result":"continue"}' && exit 0
+[ -z "$PYTHON" ] && echo '{"continue":true}' && exit 0
 
 # Run extraction in background (fire-and-forget)
 nohup "$PYTHON" -c "
@@ -254,7 +259,7 @@ if learnings:
 " > /dev/null 2>&1 &
 disown
 
-echo '{"result":"continue"}'
+echo '{"continue":true}'
 exit 0
 ''')
         hook.chmod(0o755)

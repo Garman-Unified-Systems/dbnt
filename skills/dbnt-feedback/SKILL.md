@@ -8,6 +8,10 @@ allowed-tools: [Write, Read, Bash, Grep, Glob]
 
 **Give feedback. The skill does the rest.**
 
+> Scope: this is a source-tree reference skill for an agent host. It is not
+> included in the `dbnt` wheel, and its compound, mine, routing, and ABCD
+> behaviors are instructions executed by the host agent—not Python CLI commands.
+
 ABCD notices what is worth capturing; DBNT encodes it, compounds it across sessions, and mines it to a class. The loop spine: surface doubt, weigh together, encode the trace.
 
 ---
@@ -214,9 +218,11 @@ The store is portable and human-readable. Override `DBNT_DIR` for per-project is
 
 ---
 
-## Public skill
+## Separately versioned public skill
 
-The public version of this skill is also published at:
-[garman-skills/skills/dbnt-x-abcd](https://github.com/idirectships/garman-skills/tree/main/skills/dbnt-x-abcd)
+The release candidate for the public skill is maintained separately in
+[garman-skills](https://github.com/idirectships/garman-skills). Verify that
+repository's release state before claiming the skill is published.
 
-The underlying Python package (`pip install dbnt`) provides the CLI and API layer.
+The Python package (`pip install dbnt`) owns the CLI/API and state-root contract.
+Installing either artifact does not install the other.

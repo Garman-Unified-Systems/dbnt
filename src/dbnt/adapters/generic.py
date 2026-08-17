@@ -4,6 +4,7 @@ from pathlib import Path
 
 from dbnt.adapters.base import BaseAdapter
 from dbnt.core import Rule, RuleType
+from dbnt.state import resolve_state_root
 
 
 class GenericAdapter(BaseAdapter):
@@ -15,7 +16,7 @@ class GenericAdapter(BaseAdapter):
     """
 
     def __init__(self, base_path: Path | None = None):
-        self.base_path = base_path or Path.home() / ".dbnt"
+        self.base_path = resolve_state_root(base_path)
         self.rules_dir = self.base_path / "rules"
         self.successes_dir = self.rules_dir / "successes"
         self.failures_dir = self.rules_dir / "failures"

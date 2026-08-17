@@ -278,6 +278,7 @@ run_python_gate() {
       fi
     fi
     run "$venv/bin/python" -m pytest
+    run_python_release_gate "$venv/bin/python"
   else
     need_cmd python3
     local venv
@@ -289,7 +290,20 @@ run_python_gate() {
       run "$venv/bin/python" -m pip install -e . pytest pytest-asyncio
     fi
     run "$venv/bin/python" -m pytest
+    run_python_release_gate "$venv/bin/python"
   fi
+}
+
+run_python_release_gate() {
+  local python_bin="$1"
+  [[ -f scripts/validate_release.py ]] || return 0
+
+  local dist_dir
+  dist_dir="$(mktemp -d "${TMPDIR:-/tmp}/repo-gate-dist.XXXXXX")"
+  TMP_DIRS+=("$dist_dir")
+  run "$python_bin" scripts/validate_release.py
+  run "$python_bin" -m build --outdir "$dist_dir"
+  run "$python_bin" -m twine check "$dist_dir"/*
 }
 
 run_swift_gate() {
