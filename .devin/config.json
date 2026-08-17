@@ -1,0 +1,36 @@
+{
+  "read_config_from": {
+    "agents_standard": false,
+    "cursor": false,
+    "windsurf": false,
+    "claude": false,
+    "copilot": false,
+    "opencode": false,
+    "vscode": false,
+    "zed": false
+  },
+  "permissions": {
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Write(src/**)",
+      "Write(pyproject.toml)",
+      "Write(.github/**)",
+      "Write(.devin/**)",
+      "Exec(git commit)",
+      "Exec(git push)",
+      "Exec(git merge)",
+      "Exec(git rebase)",
+      "Exec(git checkout)",
+      "Exec(git switch)",
+      "Exec(gh)",
+      "Exec(curl)",
+      "Exec(wget)",
+      "Exec(rm)",
+      "Exec(devin)",
+      "mcp__*"
+    ]
+  }
+}
