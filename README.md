@@ -133,7 +133,7 @@ That is what DBNT implements.
 | Signal clarity | Ambiguous ("hmm, try again") | Explicit protocol commands plus natural-language signal classification |
 | Persistence | Lost at session boundary | Encoded as rules, survives indefinitely |
 | Success handling | Ignored or undifferentiated | Weighted 1.5x, separately tracked |
-| Failure handling | Vague disapproval | Categorized, pattern-detected, auto-promoted |
+| Failure handling | Vague disapproval | Categorized; eligible learning groups promote only when an operator runs `dbnt promote` |
 | Content fabrication defense | None | Corrections can be captured as durable local rules |
 | Learning lifecycle | Accumulates without review | FSRS-inspired health classification and explicit boost operations |
 | Multi-agent readiness | N/A | A shared filesystem root can be configured; synchronization is external |
@@ -149,7 +149,7 @@ Five subsystems, one goal — agents that get better over time:
 - **Protocol Engine** — Recognizes the explicit `db`, `dbn`, `dbnm`, `dbyc`, `fixed`, and `tweak` commands and records their score events.
 - **Signal Detection** — Classifies common natural-language phrases by polarity, strength, and weight. The CLI reports the classification; callers decide whether to encode it.
 - **Rule Encoding** — Stores learnings as human-readable markdown with weighted frontmatter. Success files and failure files, separately tracked
-- **Learning System** — Pattern detection groups similar corrections. Three occurrences of the same pattern auto-promotes it to a permanent rule
+- **Learning System** — `dbnt patterns` reports similar learning groups. An eligible group becomes a rule only when an operator runs `dbnt promote`.
 - **FSRS-inspired Decay Engine** — Explicit reviews and boosts update stability; `dbnt sweep` reports healthy, review, and archive candidates without moving files.
 
 ---
@@ -179,27 +179,27 @@ Wire DBNT into your AI tool and explicitly encode corrections worth retaining. D
 - Use `dbnt detect` to classify natural-language feedback, then `dbnt success` or `dbnt failure` to persist the lesson
 - In a later session, have your host read the rule files from the configured state directory
 
-This alone significantly reduces repeat errors by making every failure a teachable moment the agent encodes immediately.
+This gives the host a durable rule source; measuring whether repeat errors fall remains the host's responsibility.
 
 ### Level 2: Persistent Rules with Lifecycle Management
 
 Rules accumulate. Without review, you can end up with stale files that slow context loading and contradict each other. DBNT supplies decay state and a classification report; the operator controls archival.
 
-- Frequently-applied rules gain stability — they're harder to decay
+- Explicit `DecayEngine.boost` calls increase stability
 - Reviewed rules change stability; `dbnt sweep` reports candidates but does not archive them
-- `dbnt dissonance` surfaces conflicting rules before they cause issues
+- `dbnt dissonance` reports aggregate success/failure balance; it does not compare rule content or detect conflicts
 
 The report gives an operator or host application evidence to review or archive rules. DBNT 0.6.0 does not mutate rule files during a sweep.
 
-### Level 3: Skill Improvement Through Pattern Promotion
+### Level 3: Explicit Pattern Promotion
 
-When you correct the same class of mistake three or more times, DBNT detects the pattern and auto-promotes it to a permanent, high-confidence rule. Individual learnings become structural improvements.
+When the learning store contains three or more similar entries, `dbnt patterns` can report the eligible group. A rule is written only when an operator runs `dbnt promote`.
 
-- Similar corrections cluster automatically
-- Promotion threshold: 3+ occurrences with pattern confidence
+- `dbnt patterns` groups similar entries when invoked
+- `dbnt promote` applies the 3+ occurrence threshold and writes qualifying rules
 - The CLI creates and promotes rules; skill versioning and rollback are outside the package
 
-Your agent's behavior across a domain improves without manual rule-writing.
+Promotion is explicit and operator-triggered; DBNT does not claim that the resulting rule is automatically loaded or changes agent behavior.
 
 ### Level 4: Multi-Agent Coordination (The Horizon)
 

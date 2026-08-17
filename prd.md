@@ -67,25 +67,25 @@ As an AI agent, my learnings are stored as human-readable markdown files with we
 **Priority:** P0
 **Status:** Complete (v0.5.0)
 
-As a system, rules that get applied grow stronger and rules that sit unused fade toward archival, keeping the rule store lean.
+As a system, explicit reviews and boosts update decay state, while `dbnt sweep` reports healthy/review/archive candidates. It does not move, delete, or archive rule files.
 
 **Acceptance criteria:**
 - [x] Retrievability formula: R(t,S) = (1 + t/(9*S))^(-1)
-- [x] Boost on application (rating=3)
+- [x] Explicit `boost` operation applies rating=3
 - [x] Sweep reports rules as healthy/review/archive candidates
 - [x] Archive threshold at 0.3 retrievability
 - [x] Stability and difficulty tracking per rule
 
-### FEAT-005: Pattern Detection + Auto-Promotion
+### FEAT-005: Pattern Detection + Explicit Promotion
 **Priority:** P1
 **Status:** Complete (v0.5.0)
 
-As a system, when the same class of correction appears 3+ times, the pattern auto-promotes to a permanent rule.
+As an operator, I can inspect similar learning groups and create a qualifying rule only when I run `dbnt promote`.
 
 **Acceptance criteria:**
 - [x] SequenceMatcher grouping at 0.7 similarity threshold
-- [x] 3+ occurrences triggers promotion
-- [x] Promoted learnings marked in SQLite
+- [x] 3+ occurrences makes a group eligible for promotion
+- [x] A rule is written and its learnings are marked in SQLite only when an operator runs `dbnt promote`
 - [x] Confidence tiers: low (<5), medium (5-9), high (10+)
 - [x] O(n^2) capped at 200 learnings by default
 

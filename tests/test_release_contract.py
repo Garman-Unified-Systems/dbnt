@@ -70,3 +70,30 @@ def test_source_plugin_hooks_share_state_root_and_allow_schema():
         assert '{"continue":true}' in hook
         assert '{"result":"continue"}' not in hook
         assert "$HOME/DEV/dbnt" not in hook
+
+
+def test_lifecycle_docs_require_explicit_promotion_and_report_only_checks():
+    readme = (ROOT / "README.md").read_text()
+    prd = (ROOT / "prd.md").read_text()
+
+    for stale_claim in (
+        "pattern-detected, auto-promoted",
+        "Three occurrences of the same pattern auto-promotes it",
+        "`dbnt dissonance` surfaces conflicting rules",
+        "Similar corrections cluster automatically",
+        "without manual rule-writing",
+        "Frequently-applied rules gain stability",
+    ):
+        assert stale_claim not in readme
+    assert "aggregate success/failure balance" in readme
+    assert "only when an operator runs `dbnt promote`" in readme
+
+    for stale_claim in (
+        "keeping the rule store lean",
+        "Pattern Detection + Auto-Promotion",
+        "the pattern auto-promotes to a permanent rule",
+        "3+ occurrences triggers promotion",
+        "Boost on application (rating=3)",
+    ):
+        assert stale_claim not in prd
+    assert "only when an operator runs `dbnt promote`" in prd
