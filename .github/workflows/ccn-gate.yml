@@ -3,8 +3,8 @@ name: CCN Gate
 # Changed-code cyclomatic complexity gate (dru-2okra.20).
 # Policy: no imperative function in a changed file may have CCN > 10.
 # Analyzer: lizard 1.24.0 (pinned). Missing or tampered installer = fail loud.
-# Scope: Python only (dbnt is Python). Extend language list as needed per
-#   the manifest at scripts/ccn-allow-manifest.txt (generated/vendor paths only).
+# Scope: Python only (dbnt is Python). Adding another imperative language
+#   requires updating this workflow and .githooks/ccn-gate-lib.sh.
 # Bypass: explicit allow-manifest paths listed in scripts/ccn-allow-manifest.txt.
 # No inline ignore comments. No ad hoc per-function exemptions.
 
@@ -38,6 +38,34 @@ jobs:
           INSTALLED=$(lizard --version 2>&1)
           if [ "$INSTALLED" != "1.24.0" ]; then
             echo "ERROR: lizard version mismatch — expected 1.24.0, got: $INSTALLED"
+            exit 1
+          fi
+
+      - name: Check for unsupported imperative languages
+        run: |
+          # Fail loud if any non-Python imperative language file is changed
+          # (GAP-2 fix — dru-2okra.20). The gate covers Python only; adding
+          # another imperative language requires updating this workflow and
+          # .githooks/ccn-gate-lib.sh to provide CCN coverage for it.
+          BASE=$(git merge-base origin/main HEAD)
+          ALL_CHANGED=$(git diff --name-only "$BASE" HEAD | tr '\n' ' ')
+          IMPERATIVE_EXTS="c cc cpp cxx cs go java js ts jsx tsx rb rs swift kt"
+          UNSUPPORTED=""
+          for f in $ALL_CHANGED; do
+            ext="${f##*.}"
+            for imp_ext in $IMPERATIVE_EXTS; do
+              if [ "$ext" = "$imp_ext" ]; then
+                UNSUPPORTED="$UNSUPPORTED $f"
+                break
+              fi
+            done
+          done
+          if [ -n "$(echo "$UNSUPPORTED" | tr -d ' ')" ]; then
+            echo "ERROR: Changed files include unsupported imperative languages:"
+            for f in $UNSUPPORTED; do echo "  $f"; done
+            echo ""
+            echo "The CCN gate covers Python only. Adding support for another"
+            echo "imperative language requires updating ccn-gate.yml."
             exit 1
           fi
 

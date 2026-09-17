@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# pre-commit — CCN<=10 gate on staged Python files (dru-2okra.20).
+#
+# Runs before every commit. Checks:
+#   1. Staged files include no unsupported imperative languages.
+#   2. Staged Python files all have CCN<=10.
+#
+# Install: git config core.hooksPath .githooks
+#          (or run scripts/install-hooks.sh)
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.githooks/ccn-gate-lib.sh
+source "$HOOK_DIR/ccn-gate-lib.sh"
+
+# Collect staged files (index vs HEAD).
+ALL_STAGED=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null | tr '\n' ' ' || true)
+
+if [ -z "$(echo "$ALL_STAGED" | tr -d ' ')" ]; then
+    exit 0
+fi
+
+# Fail loud on unsupported imperative languages.
+ccn_check_unsupported_langs "$ALL_STAGED"
+
+# Collect staged Python files.
+STAGED_PY=$(git diff --cached --name-only --diff-filter=ACM -- '*.py' 2>/dev/null | tr '\n' ' ' || true)
+
+if [ -z "$(echo "$STAGED_PY" | tr -d ' ')" ]; then
+    exit 0
+fi
+
+# Apply allow-manifest filter.
+STAGED_PY=$(ccn_filter_manifest "$STAGED_PY" "$REPO_ROOT")
+
+# Verify analyzer.
+ccn_check_analyzer
+
+# Run gate.
+ccn_run_gate "$STAGED_PY" "pre-commit"

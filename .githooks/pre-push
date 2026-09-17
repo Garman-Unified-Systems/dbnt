@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# pre-push — CCN<=10 gate on Python files changed vs origin/main (dru-2okra.20).
+#
+# Runs before git push. Checks the full branch diff vs origin/main so
+# complexity introduced across multiple commits is caught before push.
+#
+# Checks:
+#   1. Changed files include no unsupported imperative languages.
+#   2. Changed Python files all have CCN<=10.
+#
+# Install: git config core.hooksPath .githooks
+#          (or run scripts/install-hooks.sh)
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=.githooks/ccn-gate-lib.sh
+source "$HOOK_DIR/ccn-gate-lib.sh"
+
+# Determine the merge-base against origin/main.
+BASE=""
+if git rev-parse --verify origin/main >/dev/null 2>&1; then
+    BASE=$(git merge-base origin/main HEAD 2>/dev/null || true)
+fi
+
+if [ -z "$BASE" ]; then
+    # No origin/main reference yet (first push) — skip.
+    echo "ccn-gate [pre-push]: no origin/main reference — skipped."
+    exit 0
+fi
+
+# Collect all changed files.
+ALL_CHANGED=$(git diff --name-only --diff-filter=ACM "$BASE" HEAD 2>/dev/null | tr '\n' ' ' || true)
+
+if [ -z "$(echo "$ALL_CHANGED" | tr -d ' ')" ]; then
+    exit 0
+fi
+
+# Fail loud on unsupported imperative languages.
+ccn_check_unsupported_langs "$ALL_CHANGED"
+
+# Collect changed Python files.
+CHANGED_PY=$(git diff --name-only --diff-filter=ACM "$BASE" HEAD -- '*.py' 2>/dev/null | tr '\n' ' ' || true)
+
+if [ -z "$(echo "$CHANGED_PY" | tr -d ' ')" ]; then
+    exit 0
+fi
+
+# Apply allow-manifest filter.
+CHANGED_PY=$(ccn_filter_manifest "$CHANGED_PY" "$REPO_ROOT")
+
+# Verify analyzer.
+ccn_check_analyzer
+
+# Run gate.
+ccn_run_gate "$CHANGED_PY" "pre-push"
