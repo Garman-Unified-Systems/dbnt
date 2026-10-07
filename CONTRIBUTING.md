@@ -10,7 +10,12 @@ cd dbnt
 uv venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
+bash scripts/install-hooks.sh
 ```
+
+The last step wires the local git hooks (`pre-commit`, `pre-merge-commit`, `pre-push`)
+that enforce the CCN<=10 cyclomatic-complexity gate before each commit and push.
+The gate requires `lizard==1.24.0` which is already installed by `.[dev]`.
 
 ## Running Tests
 
