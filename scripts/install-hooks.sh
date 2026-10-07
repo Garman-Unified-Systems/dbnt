@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# install-hooks.sh — configure git to use .githooks for this repo.
-#
-# Run once after cloning:
-#   bash scripts/install-hooks.sh
-#
-# This sets core.hooksPath = .githooks so git runs the bundled hooks
-# (pre-commit, pre-merge-commit, pre-push) for every local operation.
 
 set -euo pipefail
 
@@ -21,7 +14,6 @@ if [ ! -d "$HOOKS_DIR" ]; then
     exit 1
 fi
 
-# Make all hook scripts executable.
 chmod +x "$HOOKS_DIR"/*
 
 git -C "$REPO_ROOT" config core.hooksPath .githooks
