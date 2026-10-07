@@ -158,12 +158,22 @@ def test_inline_suppression_fails(repo: Path) -> None:
     assert result.returncode == 1 and 'suppression' in result.stderr
 
 
-def test_analyzer_version_mismatch_fails(repo: Path) -> None:
-    stage(repo, 'changed.py', SIMPLE)
-    (repo / 'lizard.py').write_text('print("0.0.0")\n')
+def test_matching_version_module_spoof_cannot_bypass_gate(repo: Path) -> None:
+    stage(repo, 'changed.py', COMPLEX)
+    stage(repo, 'lizard.py', 'print("1.24.0")\n')
     env = dict(os.environ, PYTHONPATH=str(repo))
-    result = run(repo, '--staged', env=env)
-    assert result.returncode == 1 and 'lizard==1.24.0 required' in result.stderr
+    red = run(repo, '--staged', env=env)
+    assert red.returncode == 1 and 'exceed CCN' in red.stderr
+    stage(repo, 'changed.py', SIMPLE)
+    green = run(repo, '--staged', env=env)
+    assert green.returncode == 0
+
+
+def test_analyzer_version_remains_pinned(repo: Path) -> None:
+    result = subprocess.run([sys.executable, '-I', '-m', 'lizard', '--version'],
+                            cwd=repo, capture_output=True, text=True, check=False)
+    assert result.returncode == 0
+    assert result.stdout.strip() == '1.24.0'
 
 
 def test_push_checks_entire_branch_against_main(repo: Path) -> None:
@@ -173,3 +183,13 @@ def test_push_checks_entire_branch_against_main(repo: Path) -> None:
     tip = commit(repo)
     update = f"refs/heads/topic {tip} refs/heads/topic {complex_sha}\n"
     assert run(repo, "--push", stdin=update).returncode == 1
+
+
+def test_missing_analyzer_fails(repo: Path, tmp_path: Path) -> None:
+    stage(repo, 'changed.py', SIMPLE)
+    environment = tmp_path / 'without-analyzer'
+    subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(environment)], check=True)
+    interpreter = environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+    result = subprocess.run([str(interpreter), 'scripts/ccn_gate.py', '--staged'],
+                            cwd=repo, capture_output=True, text=True, check=False)
+    assert result.returncode == 1 and 'lizard==1.24.0 required' in result.stderr

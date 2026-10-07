@@ -39,7 +39,7 @@ def manifest(ref: str) -> list[str]:
 
 
 def check_analyzer() -> None:
-    result = subprocess.run([sys.executable, "-m", "lizard", "--version"],
+    result = subprocess.run([sys.executable, "-I", "-m", "lizard", "--version"],
                             capture_output=True, text=True, check=False)
     version = (result.stdout + result.stderr).strip()
     if result.returncode or version != "1.24.0":
@@ -78,7 +78,7 @@ def check_snapshot(base: str | None, ref: str) -> None:
             print(f"Checking {path!r} as {destination.name}", flush=True)
             destination.write_bytes(content)
             snapshots.append(str(destination))
-        result = subprocess.run([sys.executable, "-m", "lizard", *snapshots,
+        result = subprocess.run([sys.executable, "-I", "-m", "lizard", *snapshots,
                                  "-C", "10", "-w", "-i", "0"], check=False)
         if result.returncode:
             raise ValueError("changed Python functions exceed CCN=10")
