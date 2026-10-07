@@ -39,10 +39,10 @@ from dbnt.extract import (
 from dbnt.learning import DecayEngine, DecayState, LearningStore, PatternDetector
 from dbnt.protocol import Action, Command, Protocol, ProtocolResponse
 from dbnt.signals.detector import Signal, SignalStrength, SignalType, detect_signal
+from dbnt.state import resolve_state_root
 
-__version__ = "0.5.3"
+__version__ = "0.6.0"
 __all__ = [
-    # Bounded agency
     "classify_action",
     "enforce_action",
     "evaluate_cases",
@@ -86,4 +86,6 @@ __all__ = [
     "Signal",
     "SignalType",
     "SignalStrength",
+    # State
+    "resolve_state_root",
 ]

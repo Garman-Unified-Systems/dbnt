@@ -24,10 +24,10 @@ Human Feedback
     +-- transcript JSONL -> Extract Engine ------> Regex or Ollama extraction
                                 |
                                 v
-                     Rule files (markdown)    ~/.dbnt/rules/{successes,failures}/*.md
+                     Rule files (markdown)    $DBNT_DIR/rules/{successes,failures}/*.md
                                 |
                                 v
-                    Learning Store (SQLite)   ~/.dbnt/learnings.db
+                    Learning Store (SQLite)   $DBNT_DIR/learnings.db
                                 |
                                 v
                      Pattern Detector         SequenceMatcher grouping (0.7 threshold)
@@ -36,14 +36,14 @@ Human Feedback
                                 v
                     FSRS-6 Decay Engine       R(t,S) = (1 + t/(9*S))^(-1)
                     +-- Applied? --> Boost stability
-                    +-- Unused?  --> Fade -> archive
+                    +-- Sweep --------> Report review/archive candidates
 ```
 
 ## Patterns
 
-- **State management:** ScoreState persisted as JSON (`~/.dbnt/score.json`). Learning state in SQLite. Rule files as individual markdown.
+- **State management:** One resolver selects `DBNT_DIR` or the `~/.dbnt` default. ScoreState is JSON, learning/decay state is SQLite, and rules are markdown files.
 - **Data flow:** Unidirectional. Input -> detection -> encoding -> storage -> decay. No cycles.
-- **Error handling:** Graceful fallbacks everywhere. Ollama down -> regex extraction. Corrupt JSON -> fresh ScoreState. Missing dirs -> auto-create.
+- **Error handling:** Ollama extraction can fall back to regex. Corrupt score JSON is quarantined before a clean ScoreState is used. Missing state directories are created on write.
 - **Dedup:** Cross-session and within-session dedup on first 80 normalized chars. Contamination filter rejects system-prompt noise.
 - **Adapter pattern:** `BaseAdapter` ABC with 5 methods. New integrations implement the interface without touching core.
 
@@ -56,14 +56,16 @@ Human Feedback
 | pytest-cov | >=4.0 | Coverage | Dev only |
 | ruff | >=0.1.0 | Linting + formatting | Dev only |
 | mypy | >=1.0 | Type checking (strict) | Dev only |
+| build | >=1.2 | Wheel/sdist release gate | Dev only |
+| twine | >=5.0 | Distribution metadata check | Dev only |
 | langchain-core | >=0.1.0 | LangChain adapter | Optional (`dbnt[langchain]`) |
 
 Zero runtime dependencies beyond click. Everything else is Python stdlib: `sqlite3`, `pathlib`, `dataclasses`, `re`, `json`, `secrets`, `difflib`, `enum`, `datetime`, `urllib`.
 
 ## Infrastructure
 
-- **Hosting:** PyPI (`pip install dbnt`). Source on GitHub (idirectships/dbnt).
-- **CI/CD:** GitHub Actions. Triggered on push to main + PRs to main. Matrix: Python 3.10, 3.11, 3.12, 3.13. Steps: lint (ruff) -> test (pytest).
+- **Hosting:** PyPI (`pip install dbnt`). Source on GitHub ([Garman-Unified-Systems/dbnt](https://github.com/Garman-Unified-Systems/dbnt)).
+- **CI/CD:** GitHub Actions. PR/main CI covers Python 3.10-3.13. Tag-only publication requires an exact package-matching `vX.Y.Z` tag on a main ancestor, green tests/lint, build, and `twine check` before OIDC publication.
 - **Plugin packaging:** `.claude-plugin/` directory for Claude Code marketplace distribution.
 - **Monitoring:** None (local-first library, not a service).
 
@@ -78,6 +80,8 @@ cli.py
   +-- adapters/claude_code.py
   +-- adapters/generic.py
 
+state.py                 (single DBNT_DIR/default resolver)
+
 core.py
   +-- storage/rules.py   (load_rules_from_dir, parse_rule_file)
 
@@ -90,11 +94,10 @@ adapters/base.py         (imports core.Rule only)
 ## Local State Layout
 
 ```
-~/.dbnt/
+$DBNT_DIR/               # defaults to ~/.dbnt/
 +-- rules/
 |   +-- successes/       # Markdown rule files (1.5x weighted)
 |   +-- failures/        # Markdown rule files (1.0x weighted)
-|   +-- patterns/        # Auto-promoted from recurring learnings
 +-- learnings.db         # SQLite: learnings table + rule_decay table
 +-- score.json           # Protocol score history (JSON)
 ```
@@ -102,6 +105,6 @@ adapters/base.py         (imports core.Rule only)
 ## Constraints
 
 - **Performance:** Pattern detection is O(n^2) via SequenceMatcher. Capped at 200 learnings by default. `--limit` flag for manual override.
-- **Security:** Zero network calls in core library. Ollama extraction is opt-in and local-only. No API keys, no telemetry, no cloud. State directory is user-owned (`~/.dbnt/`).
+- **Security:** Zero network calls in core storage/protocol paths. Ollama extraction is opt-in and local-only. No API keys or telemetry. State is user-owned under `DBNT_DIR` (default `~/.dbnt/`).
 - **Cost:** $0. No cloud services. No API keys. No subscriptions.
 - **Compatibility:** Python 3.10+ (uses `X | Y` union syntax). Tested on 3.10-3.13.

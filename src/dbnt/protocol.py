@@ -10,8 +10,12 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from dbnt.state import resolve_state_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class Command(Enum):
@@ -150,7 +154,7 @@ class Protocol:
     """
 
     def __init__(self, state_dir: Path | None = None):
-        self.state_dir = state_dir or Path.home() / ".dbnt"
+        self.state_dir = resolve_state_root(state_dir)
         self.score_path = self.state_dir / "score.json"
         self._state: ScoreState | None = None
 

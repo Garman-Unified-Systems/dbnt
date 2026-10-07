@@ -14,24 +14,23 @@ Traditional memory systems record what went wrong, creating agents that know a h
 
 ## Solution
 
-DBNT (Do Better Next Time) is a universal feedback protocol that turns human corrections into persistent, weighted learning rules.
+DBNT (Do Better Next Time) is a local feedback protocol and rule-lifecycle toolkit. It classifies feedback and gives callers explicit operations for persisting weighted learning rules.
 
-Four escalating commands (DB, DBN, DBNM, DBYC) signal correction severity. Natural language works too -- "not quite" and "perfect" are detected without special syntax. Every correction encodes a rule as a human-readable markdown file. Success signals carry 1.5x weight because a working path is rarer and more valuable than a broken one.
+Four explicit commands (DB, DBN, DBNM, DBYC) return correction actions. A separate signal detector classifies common natural-language phrases such as "not quite" and "perfect." Encoding is explicit: the caller invokes the success or failure API/CLI to create a human-readable markdown file. Success rules default to 1.5x weight.
 
-Rules persist across sessions. Applied rules grow stronger (FSRS-6 spaced-repetition decay). Unused rules fade toward archival. Recurring patterns auto-promote to permanent rules after 3+ occurrences. The rule store stays lean without manual pruning.
+Rules persist across sessions. Explicit reviews and boosts change FSRS-inspired decay state. `dbnt sweep` reports healthy, review, and archive candidates but does not move files. `dbnt promote` can promote groups of three or more similar learning rows when an operator runs it. Archival remains an operator or host action.
 
 No cloud. No API keys. No external services. Everything runs locally. The rule store is a directory of markdown files and a SQLite database. You own all of it.
 
 ## How It Works
 
-1. **You correct the agent.** Say "dbn" (structured) or "that's not right" (natural language).
-2. **DBNT classifies the signal.** Severity, polarity, and weight are determined.
-3. **A rule is encoded.** Markdown file written to `~/.dbnt/rules/`. Success at 1.5x, failure at 1.0x.
-4. **Next session, rules load.** The adapter injects active rules into the agent's context.
-5. **Rules evolve.** Applied rules strengthen. Unused rules decay. Patterns cluster and promote.
-6. **The agent stops repeating itself.** Correction rate drops over time.
+1. **You provide feedback.** Pass a protocol command to `dbnt process` or text to `dbnt detect`.
+2. **DBNT returns structured information.** The caller receives an action or signal classification.
+3. **The caller encodes deliberately.** `dbnt success` or `dbnt failure` writes under `$DBNT_DIR/rules/` (default `~/.dbnt`).
+4. **The host consumes rules.** DBNT 0.6.0 does not inject them into prompts automatically.
+5. **Operators manage lifecycle.** Learnings can be grouped/promoted; decay state can be reviewed/boosted; sweep reports candidates.
 
-The entire loop requires zero configuration after `pip install dbnt && dbnt install --adapter claude-code`.
+The local store requires no server. Host-side rule loading, archival, distributed synchronization, and concurrency controls are separate integration work.
 
 ## Market
 
@@ -55,7 +54,7 @@ The entire loop requires zero configuration after `pip install dbnt && dbnt inst
 
 DBNT is open source (MIT). The protocol and library are free.
 
-The business model is the production system built on top of it. DBNT is the foundation layer for a multi-node autonomous agent network that uses shared rule stores, cross-agent learning propagation, and probabilistic peer review. That system isn't open source, but the protocol it runs on is.
+The package is intentionally local and composable. A distributed coordination product could build on its rule format, but transport, cross-agent propagation, concurrency control, and peer review are not capabilities of DBNT 0.6.0.
 
 Value flows from adoption: more users -> more adapters -> more integrations -> more demand for the production coordination layer that sits above it.
 
@@ -66,6 +65,6 @@ Value flows from adoption: more users -> more adapters -> more integrations -> m
 | 1 | Core protocol, signal detection, CLI, Claude Code adapter | Done (v0.2.0) |
 | 2 | FSRS decay, pattern promotion, transcript extraction, CI | Done (v0.5.0) |
 | 3 | Performance hardening, dedup, contamination filter | Done (v0.5.2) |
-| 4 | LangChain + Cursor + MCP adapters, broader ecosystem reach | Planned |
-| 5 | Multi-agent rule propagation, shared stores, peer review | Planned |
-| 6 | Stable v1.0 API, documentation site, community adapters | Planned |
+| 4 | One `DBNT_DIR` state-root contract, hook/release robustness | 0.6.0 release candidate |
+| 5 | Adapter expansion after compatibility review | Planned |
+| 6 | Stable v1.0 API; distributed coordination separately scoped | Planned |

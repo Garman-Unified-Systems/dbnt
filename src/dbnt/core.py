@@ -7,6 +7,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from dbnt.state import resolve_state_root
+
 
 class RuleType(Enum):
     """Type of rule."""
@@ -99,7 +101,7 @@ class RuleStore:
     """Storage for DBNT rules."""
 
     def __init__(self, base_path: Path | None = None):
-        self.base_path = base_path or Path.home() / ".dbnt" / "rules"
+        self.base_path = base_path if base_path is not None else resolve_state_root() / "rules"
         self.success_path = self.base_path / "successes"
         self.failure_path = self.base_path / "failures"
         self._ensure_paths()
@@ -146,7 +148,8 @@ _store: RuleStore | None = None
 def get_store() -> RuleStore:
     """Get or create the global rule store."""
     global _store
-    if _store is None:
+    expected_path = resolve_state_root() / "rules"
+    if _store is None or _store.base_path != expected_path:
         _store = RuleStore()
     return _store
 

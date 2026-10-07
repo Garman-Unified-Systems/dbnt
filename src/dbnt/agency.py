@@ -68,6 +68,17 @@ class ActionProposal:
     requires_current_state: bool = False
     current_state_verified: bool = False
 
+    def __post_init__(self) -> None:
+        """Reject untyped runtime effects and boundary grants before evaluation."""
+        if not isinstance(self.effect, Effect):
+            raise TypeError("effect must be an Effect")
+        for name in ("boundaries", "authorized_boundaries"):
+            values = getattr(self, name)
+            if not isinstance(values, frozenset) or any(
+                not isinstance(value, Boundary) for value in values
+            ):
+                raise TypeError(f"{name} must be a frozenset of Boundary values")
+
 
 @dataclass(frozen=True)
 class AgencyDecision:
@@ -160,16 +171,17 @@ def classify_action(proposal: ActionProposal) -> AgencyDecision:
     if required & authority_trigger:
         required.add(Boundary.AUTHORITY)
 
+    required.discard(Boundary.CURRENT_STATE)
     unmet.update(required - set(proposal.authorized_boundaries))
-    # Boundary grants describe scope. They cannot self-certify their source.
     if Boundary.AUTHORITY in required:
         if proposal.authority_verified:
             unmet.discard(Boundary.AUTHORITY)
         else:
             unmet.add(Boundary.AUTHORITY)
 
-    # Current truth must be observed; it cannot be satisfied by old authority.
-    if proposal.requires_current_state and not proposal.current_state_verified:
+    if (
+        proposal.requires_current_state or Boundary.CURRENT_STATE in proposal.boundaries
+    ) and not proposal.current_state_verified:
         unmet.add(Boundary.CURRENT_STATE)
 
     if unmet:

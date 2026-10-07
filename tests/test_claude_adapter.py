@@ -54,3 +54,16 @@ def test_adapter_run_action_executes_verified_move(tmp_path):
     result = adapter.run_action(proposal, lambda: "done")
 
     assert result == "done"
+
+
+def test_generated_hooks_emit_supported_allow_schema(tmp_path):
+    adapter = ClaudeCodeAdapter(claude_dir=tmp_path)
+    adapter.hooks_dir.mkdir(parents=True)
+
+    adapter._install_protocol_hook()
+    adapter._install_learning_hook()
+
+    for name in ("dbnt-protocol.sh", "dbnt-learn.sh"):
+        hook = (tmp_path / "hooks" / name).read_text()
+        assert '{"continue":true}' in hook
+        assert '{"result":"continue"}' not in hook

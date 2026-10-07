@@ -7,8 +7,12 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from dbnt.state import resolve_state_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ─── FSRS-6 Simplified Decay ───────────────────────────────────────────────
 
@@ -149,7 +153,7 @@ class LearningStore:
     """SQLite-backed learning storage. Supports context manager protocol."""
 
     def __init__(self, db_path: Path | None = None):
-        self.db_path = db_path or Path.home() / ".dbnt" / "learnings.db"
+        self.db_path = db_path if db_path is not None else resolve_state_root() / "learnings.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection | None = None
         self._init_db()

@@ -1,0 +1,25 @@
+initialize:
+  - run: |
+      python --version
+
+maintenance:
+  - run: |
+      python -m pip install -e '.[dev]'
+
+knowledge:
+  - name: focused-tests
+    contents: |
+      Run a focused test first:
+      python -m pytest -q <test-path>
+  - name: full-tests
+    contents: |
+      Run the full suite:
+      python -m pytest -q
+  - name: lint
+    contents: |
+      Lint source and tests:
+      python -m ruff check src tests
+  - name: types
+    contents: |
+      Type-check production source:
+      python -m mypy src

@@ -3,10 +3,14 @@
 ## Core Adapters (Included)
 
 ### `generic`
-File-based adapter. Works anywhere. Stores rules in `~/.dbnt/rules/`.
+File-based adapter. Initializes and synchronizes rules under `$DBNT_DIR/rules/`
+(default `~/.dbnt/rules/`). It does not run a watcher.
 
 ### `claude-code`
-Integrates with Claude Code's hook system. Installs signal detection hook, syncs rules to `~/.claude/rules/`.
+Installs score-tracking and transcript-extraction hooks under `~/.claude/hooks/`.
+Its existing `sync_rule` target remains `~/.claude/rules/` for compatibility;
+score and learning state use `$DBNT_DIR`. 0.6.0 does not inject those files into
+context automatically.
 
 ## Planned Adapters
 
@@ -85,9 +89,12 @@ class BaseAdapter(ABC):
         """Check if DBNT is installed in the target system."""
 ```
 
-## Multi-Adapter Setup
+## Multi-Adapter Coordination
 
-DBNT can sync to multiple adapters simultaneously:
+DBNT 0.6.0 does not load a `dbnt.yaml` adapter fan-out configuration or
+automatically propagate rules. A host application may instantiate adapters and
+call `sync_rule` explicitly. The following is a roadmap sketch, not supported
+configuration:
 
 ```yaml
 # dbnt.yaml
@@ -102,7 +109,8 @@ adapters:
       project: my-project
 ```
 
-This way rules propagate to all your AI tools.
+Transport, conflict handling, synchronization, and multi-node propagation are
+host responsibilities.
 
 ## Contributing an Adapter
 

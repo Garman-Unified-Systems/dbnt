@@ -1,5 +1,6 @@
 """Regression tests for DBNT bounded-agency action selection."""
 
+import pytest
 from click.testing import CliRunner
 
 from dbnt.agency import (
@@ -240,3 +241,69 @@ def test_action_rejected_carries_the_full_decision():
     error = ActionRejectedError(classify_action(proposal))
 
     assert error.decision.disposition is Disposition.GATE
+
+
+@pytest.mark.parametrize("effect", ["external_mutation", "observe", None, 1, object()])
+def test_untyped_effect_is_rejected_before_adapter_execution(effect):
+    from dbnt.adapters.generic import GenericAdapter
+
+    calls = []
+    with pytest.raises(TypeError, match="effect must be an Effect"):
+        proposal = ActionProposal(name="publish", advances_outcome=True, effect=effect)
+        GenericAdapter().run_action(proposal, lambda: calls.append("published"))
+    assert calls == []
+
+
+@pytest.mark.parametrize("verified", [False, True])
+@pytest.mark.parametrize("granted", [False, True])
+def test_explicit_current_state_boundary_uses_fresh_evidence(verified, granted):
+    proposal = ActionProposal(
+        name="apply a current state dependent fix",
+        advances_outcome=True,
+        effect=Effect.LOCAL_MUTATION,
+        boundaries=frozenset({Boundary.CURRENT_STATE}),
+        authorized_boundaries=frozenset({Boundary.CURRENT_STATE}) if granted else frozenset(),
+        current_state_verified=verified,
+    )
+    calls = []
+    from dbnt.adapters.generic import GenericAdapter
+
+    adapter = GenericAdapter()
+    if verified:
+        assert adapter.run_action(proposal, lambda: calls.append("applied")) is None
+        assert calls == ["applied"]
+    else:
+        with pytest.raises(ActionRejectedError) as rejected:
+            adapter.run_action(proposal, lambda: calls.append("applied"))
+        assert rejected.value.decision.unmet_boundaries == (Boundary.CURRENT_STATE,)
+        assert calls == []
+
+
+def test_cli_current_state_boundary_cannot_be_authorized_away():
+    common = [
+        "agency-decide",
+        "--name",
+        "apply",
+        "--effect",
+        "local_mutation",
+        "--boundary",
+        "current_state",
+    ]
+    runner = CliRunner()
+    stale = runner.invoke(main, common + ["--authorized-boundary", "current_state"])
+    assert stale.exit_code == 2
+    assert '"unmet_boundaries": ["current_state"]' in stale.output
+    fresh = runner.invoke(main, common + ["--current-state-verified"])
+    assert fresh.exit_code == 0
+    assert '"disposition": "move"' in fresh.output
+
+
+@pytest.mark.parametrize("field", ["boundaries", "authorized_boundaries"])
+def test_untyped_boundaries_are_rejected(field):
+    with pytest.raises(TypeError, match="frozenset of Boundary"):
+        ActionProposal(
+            name="publish",
+            advances_outcome=True,
+            effect=Effect.LOCAL_MUTATION,
+            **{field: frozenset({"privacy"})},
+        )

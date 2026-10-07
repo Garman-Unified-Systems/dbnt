@@ -12,7 +12,7 @@ A universal feedback protocol that makes AI agents learn from human corrections 
 
 2. **AI power users** running tools like Claude Code daily who are tired of correcting the same behavior every session. They install via `pip install dbnt` + `dbnt install --adapter claude-code`. They care about: it just works, corrections stick, no configuration.
 
-3. **Multi-agent system builders** orchestrating multiple AI agents that need shared learning. They use DBNT's rule store as a swarm memory layer. They care about: cross-agent propagation, rule lifecycle, dissonance monitoring.
+3. **Multi-agent system builders** evaluating a common local rule format. DBNT 0.6.0 can point processes at one filesystem root, but transport, synchronization, concurrency control, and cross-node propagation remain host responsibilities.
 
 ## Success Criteria
 
@@ -21,7 +21,7 @@ A universal feedback protocol that makes AI agents learn from human corrections 
 | Repeat correction rate | <5% after 2 weeks of use | Same pattern encoded twice = repeat |
 | Rule store health | >60% success rules (weighted) | `dbnt dissonance` output |
 | Time to first value | <2 minutes | Install -> first rule encoded |
-| Stale rule ratio | <20% of active rules | `dbnt sweep` archive count vs total |
+| Stale rule candidate ratio | <20% of active rules | `dbnt sweep` report vs total; archival is an operator action |
 | PyPI installs | Growth month-over-month | PyPI download stats |
 
 ## Features
@@ -67,25 +67,25 @@ As an AI agent, my learnings are stored as human-readable markdown files with we
 **Priority:** P0
 **Status:** Complete (v0.5.0)
 
-As a system, rules that get applied grow stronger and rules that sit unused fade toward archival, keeping the rule store lean.
+As a system, explicit reviews and boosts update decay state, while `dbnt sweep` reports healthy/review/archive candidates. It does not move, delete, or archive rule files.
 
 **Acceptance criteria:**
 - [x] Retrievability formula: R(t,S) = (1 + t/(9*S))^(-1)
-- [x] Boost on application (rating=3)
-- [x] Sweep categorizes rules as healthy/review/archive
+- [x] Explicit `boost` operation applies rating=3
+- [x] Sweep reports rules as healthy/review/archive candidates
 - [x] Archive threshold at 0.3 retrievability
 - [x] Stability and difficulty tracking per rule
 
-### FEAT-005: Pattern Detection + Auto-Promotion
+### FEAT-005: Pattern Detection + Explicit Promotion
 **Priority:** P1
 **Status:** Complete (v0.5.0)
 
-As a system, when the same class of correction appears 3+ times, the pattern auto-promotes to a permanent rule.
+As an operator, I can inspect similar learning groups and create a qualifying rule only when I run `dbnt promote`.
 
 **Acceptance criteria:**
 - [x] SequenceMatcher grouping at 0.7 similarity threshold
-- [x] 3+ occurrences triggers promotion
-- [x] Promoted learnings marked in SQLite
+- [x] 3+ occurrences makes a group eligible for promotion
+- [x] A rule is written and its learnings are marked in SQLite only when an operator runs `dbnt promote`
 - [x] Confidence tiers: low (<5), medium (5-9), high (10+)
 - [x] O(n^2) capped at 200 learnings by default
 
@@ -145,5 +145,6 @@ As a user, I can check if my rule store is anxiety-driven (too many failure rule
 | v0.2.0 | 2026-01-06 | Adapters, dissonance, rule categories |
 | v0.5.0 | 2026-03-15 | FSRS decay, pattern promotion, transcript extraction, CI |
 | v0.5.2 | 2026-03-20 | Performance cap, dedup, contamination filter |
-| v0.6.0 | TBD | LangChain adapter, MCP server adapter |
-| v1.0.0 | TBD | Stable API, multi-agent rule propagation |
+| v0.6.0 | 2026 | Shared `DBNT_DIR` state-root contract, robustness fixes, truthful package/release gates |
+| v0.7.0 | TBD | Adapter expansion after compatibility review |
+| v1.0.0 | TBD | Stable API; multi-agent propagation remains a separately scoped design |

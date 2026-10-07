@@ -6,7 +6,7 @@ set -euo pipefail
 
 INPUT=$(cat)
 MESSAGE=$(echo "$INPUT" | jq -r '.user_prompt // .prompt // ""' 2>/dev/null || echo "")
-[ -z "$MESSAGE" ] && echo '{"result":"continue"}' && exit 0
+[ -z "$MESSAGE" ] && echo '{"continue":true}' && exit 0
 
 # Normalize
 MSG_LOWER=$(echo "$MESSAGE" | tr '[:upper:]' '[:lower:]' | sed 's/^[[:space:]]*//')
@@ -28,10 +28,10 @@ elif echo "$MSG_LOWER" | /usr/bin/grep -qE "^tweak(\s|$|[.!])"; then
     CMD="TWEAK"; POINTS=0
 fi
 
-[ -z "$CMD" ] && echo '{"result":"continue"}' && exit 0
+[ -z "$CMD" ] && echo '{"continue":true}' && exit 0
 
 # Log to score file
-SCORE_DIR="$HOME/.dbnt"
+SCORE_DIR="${DBNT_DIR:-$HOME/.dbnt}"
 mkdir -p "$SCORE_DIR"
 SCORE_FILE="$SCORE_DIR/score.json"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -73,10 +73,10 @@ EVENT="{\"command\":\"$(echo $CMD | tr '[:upper:]' '[:lower:]')\",\"points\":$PO
 TMP_SCORE="${SCORE_FILE}.$$.tmp"
 if ! jq --argjson evt "$EVENT" '.total_points = '"$NEW_TOTAL"' | .events += [$evt] | .last_updated = "'"$TIMESTAMP"'"' "$SCORE_FILE" > "$TMP_SCORE"; then
     rm -f "$TMP_SCORE"
-    echo '{"result":"continue"}'
+    echo '{"continue":true}'
     exit 0
 fi
 mv "$TMP_SCORE" "$SCORE_FILE"
 
-echo '{"result":"continue"}'
+echo '{"continue":true}'
 exit 0

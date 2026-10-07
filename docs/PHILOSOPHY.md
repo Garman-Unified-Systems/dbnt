@@ -91,7 +91,7 @@ You don't have to yell. The system picks up on normal conversation.
 ```
 DBNT - [Category]: [What went wrong]
 Fix: [What to do instead]
-Artifact: ~/.dbnt/rules/failures/[name].md
+Artifact: $DBNT_DIR/rules/failures/[name].md (default root: ~/.dbnt)
 ```
 
 Categories:
@@ -106,7 +106,7 @@ Categories:
 ```
 DBGT - [Category]: [What worked]
 Pattern: [Behavior to repeat]
-Artifact: ~/.dbnt/rules/successes/[name].md
+Artifact: $DBNT_DIR/rules/successes/[name].md (default root: ~/.dbnt)
 ```
 
 Categories:
