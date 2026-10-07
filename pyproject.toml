@@ -5,7 +5,7 @@ description = "Universal feedback protocol and learning system for AI agents. Tu
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "Dru Garman", email = "drewgarman@gmail.com" }
+    { name = "Drew Garman", email = "drewgarman@gmail.com" }
 ]
 requires-python = ">=3.10"
 keywords = ["ai", "agents", "learning", "feedback", "reinforcement", "llm", "claude", "autonomous", "memory", "swarm", "protocol", "rules"]

@@ -485,4 +485,4 @@ DBNT 0.6.0 is a local feedback and rule-lifecycle toolkit. Distributed propagati
 
 ---
 
-*Built by [Dru Garman](https://github.com/idirectships). MIT licensed.*
+*Built by [Drew Garman](https://github.com/idirectships). MIT licensed.*
