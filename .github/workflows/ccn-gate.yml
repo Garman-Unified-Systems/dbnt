@@ -1,13 +1,5 @@
 name: CCN Gate
 
-# Changed-code cyclomatic complexity gate (dru-2okra.20).
-# Policy: no imperative function in a changed file may have CCN > 10.
-# Analyzer: lizard 1.24.0 (pinned). Missing or tampered installer = fail loud.
-# Scope: Python only (dbnt is Python). Adding another imperative language
-#   requires updating this workflow and .githooks/ccn-gate-lib.sh.
-# Bypass: explicit allow-manifest paths listed in scripts/ccn-allow-manifest.txt.
-# No inline ignore comments. No ad hoc per-function exemptions.
-
 on:
   pull_request:
     branches: [main]
@@ -19,110 +11,14 @@ jobs:
   ccn:
     name: Complexity (CCN<=10, changed files)
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install lizard (pinned)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install lizard==1.24.0
-          # Tamper-check: ensure the installed binary is the expected version.
-          INSTALLED=$(lizard --version 2>&1)
-          if [ "$INSTALLED" != "1.24.0" ]; then
-            echo "ERROR: lizard version mismatch — expected 1.24.0, got: $INSTALLED"
-            exit 1
-          fi
-
-      - name: Check for unsupported imperative languages
-        run: |
-          # Fail loud if any non-Python imperative language file is changed
-          # (GAP-2 fix — dru-2okra.20). The gate covers Python only; adding
-          # another imperative language requires updating this workflow and
-          # .githooks/ccn-gate-lib.sh to provide CCN coverage for it.
-          BASE=$(git merge-base origin/main HEAD)
-          ALL_CHANGED=$(git diff --name-only "$BASE" HEAD | tr '\n' ' ')
-          IMPERATIVE_EXTS="c cc cpp cxx cs go java js ts jsx tsx rb rs swift kt"
-          UNSUPPORTED=""
-          for f in $ALL_CHANGED; do
-            ext="${f##*.}"
-            for imp_ext in $IMPERATIVE_EXTS; do
-              if [ "$ext" = "$imp_ext" ]; then
-                UNSUPPORTED="$UNSUPPORTED $f"
-                break
-              fi
-            done
-          done
-          if [ -n "$(echo "$UNSUPPORTED" | tr -d ' ')" ]; then
-            echo "ERROR: Changed files include unsupported imperative languages:"
-            for f in $UNSUPPORTED; do echo "  $f"; done
-            echo ""
-            echo "The CCN gate covers Python only. Adding support for another"
-            echo "imperative language requires updating ccn-gate.yml."
-            exit 1
-          fi
-
-      - name: Detect changed Python files
-        id: changed
-        run: |
-          # Compute the merge-base diff against origin/main so the file list is
-          # scoped to this PR's changes, not every commit on the branch.
-          BASE=$(git merge-base origin/main HEAD)
-          FILES=$(git diff --name-only "$BASE" HEAD -- '*.py' | tr '\n' ' ')
-
-          # Load allow-manifest (generated/vendor bypass list).
-          MANIFEST="scripts/ccn-allow-manifest.txt"
-          if [ -f "$MANIFEST" ]; then
-            FILTERED=""
-            for f in $FILES; do
-              SKIP=0
-              while IFS= read -r pattern; do
-                case "$f" in $pattern) SKIP=1; break ;; esac
-              done < "$MANIFEST"
-              if [ "$SKIP" -eq 0 ]; then
-                FILTERED="$FILTERED $f"
-              fi
-            done
-            FILES="$FILTERED"
-          fi
-
-          if [ -z "$(echo "$FILES" | tr -d ' ')" ]; then
-            echo "no_python_changes=true" >> "$GITHUB_OUTPUT"
-            echo "changed_files=" >> "$GITHUB_OUTPUT"
-          else
-            echo "no_python_changes=false" >> "$GITHUB_OUTPUT"
-            # Write file list to a temp artifact file rather than injecting
-            # into the step output string (avoids shell injection in run: steps).
-            echo "$FILES" > /tmp/ccn_changed_files.txt
-            echo "changed_files=/tmp/ccn_changed_files.txt" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Run CCN gate
-        if: steps.changed.outputs.no_python_changes == 'false'
-        run: |
-          FILE_LIST_PATH="${{ steps.changed.outputs.changed_files }}"
-          FILES=$(cat "$FILE_LIST_PATH")
-          echo "Checking CCN<=10 for changed files: $FILES"
-
-          # shellcheck disable=SC2086
-          lizard $FILES -C 10 -w -i 0
-          EXIT=$?
-          if [ $EXIT -ne 0 ]; then
-            echo ""
-            echo "FAIL: One or more changed functions exceed CCN=10."
-            echo "Refactor the flagged function(s) to reduce branching complexity."
-            echo "No inline suppression comments are permitted — split or simplify."
-            exit 1
-          fi
-          echo "PASS: All changed Python functions are within CCN<=10."
-
-      - name: Skip (no Python changes)
-        if: steps.changed.outputs.no_python_changes == 'true'
-        run: echo "No Python files changed in this PR — CCN gate skipped."
+      - name: Install analyzer
+        run: python -m pip install lizard==1.24.0
+      - name: Check committed snapshot
+        run: python scripts/ccn_gate.py --base origin/main

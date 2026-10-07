@@ -1,8 +1,1 @@
-# CCN bypass manifest — generated/vendor paths only.
-# Each line is a shell glob pattern relative to repo root.
-# Only paths reviewed and approved by Director may appear here.
-# No production source code, no test files, no adapters.
-# Review this file on every PR that modifies it.
-#
-# Example (uncomment to add a path):
-# src/dbnt/_vendor/*
+# Generated or vendor paths may be excluded using reviewed shell glob patterns.

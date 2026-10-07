@@ -1,283 +1,175 @@
-"""
-Tests for the CCN gate (dru-2okra.20).
+"""Execute the complexity gate against staged and committed Git snapshots."""
 
-These tests prove the gate script logic without relying on GitHub Actions.
-They verify lizard 1.24.0 is available, exits 1 on a CCN>10 function,
-and exits 0 on a CCN<=10 function — the red-green proof required by GOV-100/101.
-
-Controls in the SAME invocation:
-  - Positive control (RED):  known CCN=12 function → gate must exit 1
-  - Negative control (GREEN): known CCN=2 function → gate must exit 0
-  - Analyzer-missing control: wrong binary path → install check must exit 1
-
-Local hook tests (GAP-1):
-  - pre-commit, pre-merge-commit, pre-push hooks exist and are executable.
-  - Each hook sources ccn-gate-lib.sh.
-
-Unsupported-language tests (GAP-2):
-  - A non-Python imperative file in staged changes causes fail-loud (exit 1).
-  - A Python-only change continues normally.
-"""
+from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
-import textwrap
 from pathlib import Path
 
 import pytest
 
-# Path to .githooks directory in this repo.
-REPO_ROOT = Path(__file__).parent.parent
-GITHOOKS_DIR = REPO_ROOT / ".githooks"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SIMPLE = 'def simple(value):\n    return value\n'
+COMPLEX = 'def complex(value):\n' + ''.join(
+    f'    if value == {number}:\n        return {number}\n' for number in range(11)
+) + '    return -1\n'
 
-# ---------------------------------------------------------------------------
-# Fixtures: known-complexity Python files written to tmp paths.
-# ---------------------------------------------------------------------------
 
-COMPLEX_FUNCTION = textwrap.dedent("""\
-    def deliberately_complex(a, b, c, d, e, f, g, h, i, j, k):
-        \"\"\"CCN=12 function used as the RED control for the CCN gate test.\"\"\"
-        if a:
-            return 1
-        elif b:
-            return 2
-        elif c:
-            return 3
-        elif d:
-            return 4
-        elif e:
-            return 5
-        elif f:
-            return 6
-        elif g:
-            return 7
-        elif h:
-            return 8
-        elif i:
-            return 9
-        elif j:
-            return 10
-        elif k:
-            return 11
-        return 0
-""")
-
-SIMPLE_FUNCTION = textwrap.dedent("""\
-    def simple_lookup(a, b):
-        \"\"\"CCN=2 function used as the GREEN control for the CCN gate test.\"\"\"
-        if a:
-            return a
-        return b
-""")
+def git(repo: Path, *args: str) -> str:
+    return subprocess.check_output(['git', '-C', str(repo), *args], text=True).strip()
 
 
 @pytest.fixture()
-def complex_py(tmp_path: Path) -> Path:
-    p = tmp_path / "complex_fixture.py"
-    p.write_text(COMPLEX_FUNCTION)
-    return p
+def repo(tmp_path: Path) -> Path:
+    git(tmp_path, 'init', '-b', 'main')
+    git(tmp_path, 'config', 'user.name', 'Test Worker')
+    git(tmp_path, 'config', 'user.email', 'test@example.invalid')
+    shutil.copytree(REPO_ROOT / '.githooks', tmp_path / '.githooks')
+    (tmp_path / 'scripts').mkdir()
+    shutil.copy(REPO_ROOT / 'scripts/ccn_gate.py', tmp_path / 'scripts/ccn_gate.py')
+    (tmp_path / 'baseline.py').write_text(SIMPLE)
+    git(tmp_path, 'add', '.')
+    git(tmp_path, 'commit', '-m', 'Initial fixture')
+    git(tmp_path, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+    return tmp_path
 
 
-@pytest.fixture()
-def simple_py(tmp_path: Path) -> Path:
-    p = tmp_path / "simple_fixture.py"
-    p.write_text(SIMPLE_FUNCTION)
-    return p
+def run(repo: Path, *args: str, stdin: str = '', env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, 'scripts/ccn_gate.py', *args], cwd=repo,
+                          capture_output=True, text=True, input=stdin, env=env, check=False)
 
 
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
-
-def _run_lizard(path: Path) -> subprocess.CompletedProcess:
-    """Run lizard with CCN=10 gate on a single file. Returns the process result."""
-    return subprocess.run(
-        [sys.executable, "-m", "lizard", str(path), "-C", "10", "-w", "-i", "0"],
-        capture_output=True,
-        text=True,
-    )
+def stage(repo: Path, name: str, content: str) -> None:
+    (repo / name).parent.mkdir(parents=True, exist_ok=True)
+    (repo / name).write_text(content)
+    git(repo, 'add', '--', name)
 
 
-# ---------------------------------------------------------------------------
-# Gate tests — RED, GREEN, and tamper controls in same test session.
-# ---------------------------------------------------------------------------
+def commit(repo: Path) -> str:
+    git(repo, 'commit', '-m', 'Fixture change')
+    return git(repo, 'rev-parse', 'HEAD')
 
 
-class TestCCNGateRedGreen:
-    """GOV-100/101: positive and negative controls in the same invocation."""
-
-    def test_red_complex_function_fails_gate(self, complex_py: Path) -> None:
-        """RED control: CCN=12 function must cause gate exit 1."""
-        result = _run_lizard(complex_py)
-        assert result.returncode == 1, (
-            f"Expected exit 1 for CCN=12 function but got {result.returncode}.\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-        assert "deliberately_complex" in result.stdout, (
-            "Warning output should name the violating function."
-        )
-
-    def test_green_simple_function_passes_gate(self, simple_py: Path) -> None:
-        """GREEN control: CCN=2 function must cause gate exit 0."""
-        result = _run_lizard(simple_py)
-        assert result.returncode == 0, (
-            f"Expected exit 0 for CCN=2 function but got {result.returncode}.\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
-
-    def test_controls_differ(self, complex_py: Path, simple_py: Path) -> None:
-        """GOV-101: the two controls must produce DIFFERENT exit codes.
-
-        If both return the same exit code the instrument is stuck and both
-        results are VOID.
-        """
-        red_result = _run_lizard(complex_py)
-        green_result = _run_lizard(simple_py)
-        assert red_result.returncode != green_result.returncode, (
-            "RED and GREEN controls must return different exit codes. "
-            f"Both returned {red_result.returncode} — instrument is stuck (VOID)."
-        )
+def test_real_analyzer_red_green_and_manifest(repo: Path) -> None:
+    stage(repo, 'changed.py', COMPLEX)
+    red = run(repo, '--staged')
+    stage(repo, 'changed.py', SIMPLE)
+    green = run(repo, '--staged')
+    assert red.returncode == 1 and 'exceed CCN' in red.stderr
+    assert green.returncode == 0
+    stage(repo, 'changed.py', COMPLEX)
+    stage(repo, 'scripts/ccn-allow-manifest.txt', '# Reviewed vendor pattern\nchanged.py\n')
+    excluded = run(repo, '--staged')
+    assert excluded.returncode == 0
+    (repo / 'scripts/ccn-allow-manifest.txt').write_text('')
+    assert run(repo, '--staged').returncode == 0
 
 
-class TestCCNGateAnalyzerVersion:
-    """Analyzer tamper-check: lizard must report version 1.24.0."""
-
-    def test_lizard_version_is_pinned(self) -> None:
-        result = subprocess.run(
-            [sys.executable, "-m", "lizard", "--version"],
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, "lizard --version should exit 0"
-        version_output = (result.stdout + result.stderr).strip()
-        assert version_output == "1.24.0", (
-            f"lizard version mismatch — expected 1.24.0, got: {version_output!r}. "
-            "Update the pinned version in ccn-gate.yml if this is intentional."
-        )
+@pytest.mark.parametrize('hook', ['pre-commit', 'pre-merge-commit'])
+def test_hooks_analyze_staged_contents(repo: Path, hook: str) -> None:
+    stage(repo, 'changed.py', COMPLEX)
+    (repo / 'changed.py').write_text(SIMPLE)
+    env = dict(os.environ, PATH=str(Path(sys.executable).parent) + os.pathsep + os.environ['PATH'])
+    result = subprocess.run(['bash', f'.githooks/{hook}'], cwd=repo,
+                            capture_output=True, text=True, env=env, check=False)
+    assert result.returncode == 1
+    stage(repo, 'changed.py', SIMPLE)
+    (repo / 'changed.py').write_text(COMPLEX)
+    result = subprocess.run(['bash', f'.githooks/{hook}'], cwd=repo,
+                            capture_output=True, text=True, env=env, check=False)
+    assert result.returncode == 0
 
 
-class TestCCNGateAllowManifest:
-    """Manifest bypass: paths matching the allow-manifest must be excluded."""
-
-    def test_manifest_path_is_excluded(self, complex_py: Path, tmp_path: Path) -> None:
-        """A file listed in the manifest should not be analyzed."""
-        manifest = tmp_path / "ccn-allow-manifest.txt"
-        # Write the filename (basename) as the pattern — simulates a generated path.
-        manifest.write_text(f"*/{complex_py.name}\n")
-
-        # The gate shell script filters before calling lizard.
-        # Here we test the filter logic directly by checking the manifest presence.
-        content = manifest.read_text()
-        assert complex_py.name in content, "Manifest should contain the fixture filename"
-        # No call to lizard; this proves the manifest file is written correctly.
-        # The CI shell script uses `case "$f" in $pattern)` to skip matching paths.
+@pytest.mark.parametrize('name', ['space name.py', 'newline\nname.py', '-option.py', 'wild[card]*.py'])
+def test_paths_are_literal(repo: Path, name: str) -> None:
+    stage(repo, name, COMPLEX)
+    assert run(repo, '--staged').returncode == 1
+    stage(repo, name, SIMPLE)
+    assert run(repo, '--staged').returncode == 0
 
 
-# ---------------------------------------------------------------------------
-# GAP-1: Local git hooks exist and are executable.
-# ---------------------------------------------------------------------------
+def test_renamed_files_are_analyzed(repo: Path) -> None:
+    stage(repo, 'before.py', COMPLEX)
+    commit(repo)
+    git(repo, 'mv', 'before.py', 'after.py')
+    assert run(repo, '--staged').returncode == 1
 
 
-class TestLocalHooksExist:
-    """GAP-1: pre-commit, pre-merge-commit, pre-push hooks must exist and be executable."""
-
-    @pytest.mark.parametrize("hook_name", ["pre-commit", "pre-merge-commit", "pre-push"])
-    def test_hook_file_exists(self, hook_name: str) -> None:
-        """Each local hook file must be present under .githooks/."""
-        hook_path = GITHOOKS_DIR / hook_name
-        assert hook_path.exists(), (
-            f".githooks/{hook_name} not found at {hook_path}. "
-            "Run 'bash scripts/install-hooks.sh' after cloning."
-        )
-
-    @pytest.mark.parametrize("hook_name", ["pre-commit", "pre-merge-commit", "pre-push"])
-    def test_hook_is_executable(self, hook_name: str) -> None:
-        """Each local hook must be executable."""
-        hook_path = GITHOOKS_DIR / hook_name
-        assert hook_path.exists(), f".githooks/{hook_name} not found"
-        assert os.access(hook_path, os.X_OK), (
-            f".githooks/{hook_name} is not executable. "
-            "Run: chmod +x .githooks/{hook_name}"
-        )
-
-    @pytest.mark.parametrize("hook_name", ["pre-commit", "pre-merge-commit", "pre-push"])
-    def test_hook_sources_lib(self, hook_name: str) -> None:
-        """Each local hook must source ccn-gate-lib.sh (the shared policy library)."""
-        hook_path = GITHOOKS_DIR / hook_name
-        assert hook_path.exists(), f".githooks/{hook_name} not found"
-        content = hook_path.read_text()
-        assert "ccn-gate-lib.sh" in content, (
-            f".githooks/{hook_name} does not source ccn-gate-lib.sh. "
-            "The hook must load the shared CCN gate library to enforce the policy."
-        )
-
-    def test_lib_exists_and_is_executable(self) -> None:
-        """ccn-gate-lib.sh must be present and executable."""
-        lib_path = GITHOOKS_DIR / "ccn-gate-lib.sh"
-        assert lib_path.exists(), f"ccn-gate-lib.sh not found at {lib_path}"
-        assert os.access(lib_path, os.X_OK), "ccn-gate-lib.sh is not executable"
+def test_deletions_do_not_analyze_missing_files(repo: Path) -> None:
+    git(repo, 'rm', 'baseline.py')
+    assert run(repo, '--staged').returncode == 0
+    commit(repo)
+    assert run(repo, '--base', 'origin/main').returncode == 0
 
 
-# ---------------------------------------------------------------------------
-# GAP-2: Unsupported imperative language detection — fail loud.
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize('extension', ['go', 'rs', 'js', 'rb', 'cpp'])
+def test_unsupported_language_fails(repo: Path, extension: str) -> None:
+    stage(repo, f'file.{extension}', 'some code')
+    result = run(repo, '--staged')
+    assert result.returncode == 1 and 'unsupported imperative' in result.stderr
 
 
-class TestUnsupportedLanguageFailing:
-    """GAP-2: non-Python imperative files in a diff must cause fail-loud exit 1.
+def test_push_analyzes_supplied_sha_not_head_or_worktree(repo: Path) -> None:
+    stage(repo, 'changed.py', COMPLEX)
+    rejected_sha = commit(repo)
+    stage(repo, 'changed.py', SIMPLE)
+    accepted_sha = commit(repo)
+    update = f'refs/heads/topic {rejected_sha} refs/heads/topic {"0" * 40}\n'
+    assert run(repo, '--push', stdin=update).returncode == 1
+    (repo / 'changed.py').write_text(COMPLEX)
+    update = f'refs/heads/topic {accepted_sha} refs/heads/topic {"0" * 40}\n'
+    assert run(repo, '--push', stdin=update).returncode == 0
 
-    GOV-100/101: RED control (unsupported language → exit 1) and GREEN control
-    (Python-only → no unsupported-lang error) in the same test session.
-    """
 
-    # Imperative extensions the gate currently cannot analyze.
-    UNSUPPORTED_EXTS = ["go", "rb", "rs", "js", "ts", "java", "cs", "cpp"]
+def test_push_checks_all_updates(repo: Path) -> None:
+    stage(repo, 'changed.py', COMPLEX)
+    complex_sha = commit(repo)
+    stage(repo, 'changed.py', SIMPLE)
+    simple_sha = commit(repo)
+    updates = ''.join(f'refs/heads/{name} {sha} refs/heads/{name} {"0" * 40}\n'
+                      for name, sha in [('simple', simple_sha), ('complex', complex_sha)])
+    assert run(repo, '--push', stdin=updates).returncode == 1
 
-    def _run_unsupported_check(self, file_list: str, tmp_path: Path) -> subprocess.CompletedProcess:
-        """Run the ccn_check_unsupported_langs function via a small bash driver."""
-        lib_path = GITHOOKS_DIR / "ccn-gate-lib.sh"
-        driver = textwrap.dedent(f"""\
-            #!/usr/bin/env bash
-            set -euo pipefail
-            source {lib_path}
-            ccn_check_unsupported_langs "{file_list}"
-        """)
-        driver_path = tmp_path / "driver.sh"
-        driver_path.write_text(driver)
-        driver_path.chmod(0o755)
-        return subprocess.run(
-            ["bash", str(driver_path)],
-            capture_output=True,
-            text=True,
-        )
 
-    @pytest.mark.parametrize("ext", UNSUPPORTED_EXTS)
-    def test_red_unsupported_language_fails_loud(self, tmp_path: Path, ext: str) -> None:
-        """RED control: a changed file with an unsupported imperative extension must exit 1."""
-        result = self._run_unsupported_check(f"src/foo.{ext}", tmp_path)
-        assert result.returncode == 1, (
-            f"Expected exit 1 for unsupported imperative language '.{ext}' "
-            f"but got {result.returncode}.\nstderr: {result.stderr}"
-        )
-        assert "unsupported imperative" in result.stderr.lower() or \
-               "unsupported" in result.stderr.lower(), (
-            f"Expected a clear error message for '.{ext}' file.\nstderr: {result.stderr}"
-        )
+def test_push_missing_base_and_missing_stdin_fail(repo: Path) -> None:
+    sha = git(repo, 'rev-parse', 'HEAD')
+    git(repo, 'update-ref', '-d', 'refs/remotes/origin/main')
+    assert run(repo, '--push', stdin=f'refs/heads/topic {sha} refs/heads/topic {"0" * 40}\n').returncode == 1
+    assert run(repo, '--push').returncode == 1
+    assert run(repo, '--base', 'missing-base').returncode == 1
 
-    def test_green_python_only_passes_unsupported_check(self, tmp_path: Path) -> None:
-        """GREEN control: Python-only files must not trigger the unsupported-language check."""
-        result = self._run_unsupported_check("src/foo.py tests/test_foo.py", tmp_path)
-        assert result.returncode == 0, (
-            f"Expected exit 0 for Python-only files but got {result.returncode}.\n"
-            f"stdout: {result.stdout}\nstderr: {result.stderr}"
-        )
 
-    def test_controls_differ(self, tmp_path: Path) -> None:
-        """GOV-101: RED (unsupported lang) and GREEN (Python only) must differ."""
-        red_result = self._run_unsupported_check("src/foo.go", tmp_path)
-        green_result = self._run_unsupported_check("src/foo.py", tmp_path)
-        assert red_result.returncode != green_result.returncode, (
-            "RED (.go) and GREEN (.py) controls both returned "
-            f"{red_result.returncode} — instrument is stuck (VOID)."
-        )
+def test_deleting_remote_ref_needs_no_analysis(repo: Path) -> None:
+    sha = git(repo, 'rev-parse', 'HEAD')
+    assert run(repo, '--push', stdin=f'(delete) {"0" * 40} refs/heads/topic {sha}\n').returncode == 0
+
+
+def test_unstaged_manifest_cannot_bypass_gate(repo: Path) -> None:
+    stage(repo, 'changed.py', COMPLEX)
+    (repo / 'scripts/ccn-allow-manifest.txt').write_text('changed.py\n')
+    assert run(repo, '--staged').returncode == 1
+
+
+def test_inline_suppression_fails(repo: Path) -> None:
+    stage(repo, 'changed.py', '# lizard forgives\n' + COMPLEX)
+    result = run(repo, '--staged')
+    assert result.returncode == 1 and 'suppression' in result.stderr
+
+
+def test_analyzer_version_mismatch_fails(repo: Path) -> None:
+    stage(repo, 'changed.py', SIMPLE)
+    (repo / 'lizard.py').write_text('print("0.0.0")\n')
+    env = dict(os.environ, PYTHONPATH=str(repo))
+    result = run(repo, '--staged', env=env)
+    assert result.returncode == 1 and 'lizard==1.24.0 required' in result.stderr
+
+
+def test_push_checks_entire_branch_against_main(repo: Path) -> None:
+    stage(repo, "changed.py", COMPLEX)
+    complex_sha = commit(repo)
+    stage(repo, "unrelated.txt", "documentation")
+    tip = commit(repo)
+    update = f"refs/heads/topic {tip} refs/heads/topic {complex_sha}\n"
+    assert run(repo, "--push", stdin=update).returncode == 1
