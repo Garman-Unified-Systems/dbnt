@@ -7,6 +7,7 @@ For LLM-powered extraction, use the Ollama adapter (optional).
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -253,8 +254,8 @@ _VALID_TYPES = {"decision", "preference", "mistake", "approach"}
 
 def extract_with_ollama(
     text: str,
-    base_url: str = "http://127.0.0.1:11434",
-    model: str = "llama3.2:3b",
+    base_url: str | None = None,
+    model: str | None = None,
 ) -> list[ExtractedLearning]:
     """Extract learnings using a local Ollama model.
 
@@ -262,14 +263,18 @@ def extract_with_ollama(
 
     Args:
         text: Formatted transcript text (use format_transcript() first)
-        base_url: Ollama API base URL
-        model: Ollama model name
+        base_url: Ollama API base URL. Default: $DBNT_OLLAMA_URL, else
+            http://127.0.0.1:11434
+        model: Ollama model name. Default: $DBNT_OLLAMA_MODEL, else llama3.2:3b
 
     Returns:
         List of ExtractedLearning objects
     """
     import urllib.error
     import urllib.request
+
+    base_url = base_url or os.environ.get("DBNT_OLLAMA_URL", "http://127.0.0.1:11434")
+    model = model or os.environ.get("DBNT_OLLAMA_MODEL", "llama3.2:3b")
 
     prompt = _OLLAMA_PROMPT.format(transcript=text[:8000])
 
