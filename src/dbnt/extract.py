@@ -93,6 +93,49 @@ def _score_importance(text: str) -> float:
 
 # ─── Transcript Formatting ────────────────────────────────────────────────
 
+def _format_block(role: str, block: object) -> str | None:
+    """Render one content block as a transcript line, or None to skip it."""
+    if isinstance(block, str):
+        return f"{role}: {block}"
+    if not isinstance(block, dict):
+        return None
+    btype = block.get("type", "")
+    if btype == "text":
+        return f"{role}: {block.get('text', '')}"
+    if btype == "tool_use":
+        name = block.get("name", "unknown")
+        inp = json.dumps(block.get("input", {}))[:200]
+        return f"{role}: [tool_use: {name}({inp})]"
+    if btype == "tool_result":
+        result_text = str(block.get("content", ""))[:500]
+        return f"{role}: [tool_result: {result_text}]"
+    return None  # thinking blocks (and unknown types) are skipped
+
+
+def _entry_lines(raw_line: str) -> list[str]:
+    """Transcript lines for one JSONL row (user/assistant messages only)."""
+    raw_line = raw_line.strip()
+    if not raw_line:
+        return []
+    try:
+        entry = json.loads(raw_line)
+    except json.JSONDecodeError:
+        return []
+
+    msg = entry.get("message", entry)
+    role = msg.get("role", entry.get("type", ""))
+    if role not in ("user", "assistant"):
+        return []
+
+    content = msg.get("content", "")
+    if isinstance(content, str):
+        return [f"{role}: {content}"]
+    if isinstance(content, list):
+        rendered = (_format_block(role, block) for block in content)
+        return [line for line in rendered if line is not None]
+    return []
+
+
 def format_transcript(
     transcript_jsonl: str,
     max_chars: int = 8000,
@@ -109,41 +152,9 @@ def format_transcript(
     Returns:
         Formatted transcript text
     """
-    lines = []
+    lines: list[str] = []
     for raw_line in transcript_jsonl.strip().split("\n"):
-        raw_line = raw_line.strip()
-        if not raw_line:
-            continue
-        try:
-            entry = json.loads(raw_line)
-        except json.JSONDecodeError:
-            continue
-
-        msg = entry.get("message", entry)
-        role = msg.get("role", entry.get("type", ""))
-        if role not in ("user", "assistant"):
-            continue
-
-        content = msg.get("content", "")
-        if isinstance(content, str):
-            lines.append(f"{role}: {content}")
-        elif isinstance(content, list):
-            for block in content:
-                if isinstance(block, str):
-                    lines.append(f"{role}: {block}")
-                elif isinstance(block, dict):
-                    btype = block.get("type", "")
-                    if btype == "text":
-                        lines.append(f"{role}: {block.get('text', '')}")
-                    elif btype == "thinking":
-                        continue  # Skip thinking blocks
-                    elif btype == "tool_use":
-                        name = block.get("name", "unknown")
-                        inp = json.dumps(block.get("input", {}))[:200]
-                        lines.append(f"{role}: [tool_use: {name}({inp})]")
-                    elif btype == "tool_result":
-                        result_text = str(block.get("content", ""))[:500]
-                        lines.append(f"{role}: [tool_result: {result_text}]")
+        lines.extend(_entry_lines(raw_line))
 
     text = "\n".join(lines)
 
