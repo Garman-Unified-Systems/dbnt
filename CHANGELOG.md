@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `dbnt agency-check` command for running the bounded-agency regression suite
 - Runtime `dbnt agency-decide` command and adapter `run_action()` enforcement path
 - Mandatory action-effect typing and separately verified authority for external, irreversible, credential, or privacy boundaries
+- Runner seat slices under `$DBNT_DIR/rules/seats/<seat>/` with validated `name@node` seat resolution, `dbnt seat-capture`, `dbnt seat-rules`, and `--prompt` export
 
 ### 0.6.0 release candidate
 

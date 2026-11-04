@@ -456,7 +456,14 @@ dbnt learn "Always validate at boundaries" -d code -i 3
 dbnt patterns                     # Show recurring patterns (caps at 200 learnings)
 dbnt patterns --limit 500         # Scan more learnings (slower on large stores)
 dbnt promote                      # Auto-promote qualifying patterns to rules
+dbnt promote --seat codex@dru     # Promote into one seat slice instead
 dbnt sweep                        # Report FSRS-inspired decay categories
+
+# Seat slices
+dbnt seat-capture codex@dru "Guessed a hash" -c protocol -x "Read the file first"
+dbnt seat-rules codex@dru         # List one seat's rules with decay status
+dbnt seat-rules codex@dru --prompt  # Print a pasteable markdown rule block
+dbnt seat-rules --all             # List every seat that has rules
 
 # Status
 dbnt status                       # Full system overview
@@ -465,6 +472,55 @@ dbnt dissonance                   # Surface conflicting success/failure signals
 # Claude Code integration
 dbnt install --adapter claude-code    # Wire hooks to ~/.claude/hooks/
 dbnt uninstall                         # Remove hooks
+```
+
+### Seat Slices
+
+A seat is one runner identity in `name@node` form. A seat slice is a private
+rule directory under the shared state root, so a low-cost runner carries the
+lessons earned by that seat rather than the whole rule store:
+
+```
+$DBNT_DIR/rules/
+├── successes/            # Shared rule store
+├── failures/
+└── seats/
+    └── codex@dru/
+        ├── successes/    # Same artifact shape, same loader
+        └── failures/
+```
+
+Seat names are validated as lowercase ASCII `name@node` with no path
+separators, no `..`, and no embedded whitespace; anything else raises a clear
+error instead of resolving a path. `DBNT_DIR` and explicit constructor roots
+apply to seats exactly as they do to the shared store.
+
+Capture writes the same markdown artifact that `dbnt success` and
+`dbnt failure` write, so the existing `load_rules_from_dir` reader handles a
+slice unchanged:
+
+```bash
+dbnt seat-capture codex@dru "Guessed a file hash" -c protocol -x "Read before asserting"
+dbnt seat-capture codex@dru "Re-read after every write" -k success -c code -x "Caught a lost edit"
+```
+
+The same pattern captured twice is refused with a message naming the existing
+file; pass `--replace` to update that file in place, which keeps the original
+created date and weight. Seat rules also appear in `dbnt sweep`, which remains
+report-only and prints no seat section when no slice exists.
+
+`--prompt` prints the rules and nothing else, so a runner instruction file can
+carry its own promoted rules:
+
+```bash
+dbnt seat-rules codex@dru --prompt >> prompts/codex@dru.md
+```
+
+```markdown
+## Seat rules: codex@dru
+
+- [success/code] Re-read after every write
+- [failure/protocol] Guessed a file hash
 ```
 
 ### Performance Note
