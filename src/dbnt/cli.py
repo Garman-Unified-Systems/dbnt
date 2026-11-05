@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from itertools import chain
+from typing import TYPE_CHECKING
 
 import click
 
@@ -17,10 +19,27 @@ from dbnt.agency import (
     default_regression_cases,
     evaluate_cases,
 )
-from dbnt.core import check_dissonance, encode_failure, encode_success
+from dbnt.core import RuleType, check_dissonance, encode_failure, encode_success
 from dbnt.learning import DecayEngine, LearningStore, PatternDetector
 from dbnt.protocol import Protocol
+from dbnt.seats import (
+    SEAT_CATEGORIES,
+    SeatError,
+    capture_seat_rule,
+    decay_key,
+    list_seat_names,
+    load_seat_rules,
+    render_prompt_block,
+    validate_seat,
+)
 from dbnt.signals import detect_signal
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+    from pathlib import Path
+
+    from dbnt.core import RuleStore
+    from dbnt.learning import PatternGroup
 
 
 @click.group()
@@ -229,6 +248,136 @@ def failure(pattern: str, category: str, context: str) -> None:
     click.echo(f"✗ Encoded failure: {rule.id}")
 
 
+# ─── Seat Slices ───────────────────────────────────────────────────────────
+
+def decay_label(retrievability: float, applied_count: int) -> str:
+    """Return the decay status label shared by rule listings."""
+    if applied_count >= 5:
+        return f"boosted {applied_count}x"
+    if retrievability >= 0.7:
+        return "stable"
+    if retrievability >= 0.3:
+        return "decaying"
+    return "archive"
+
+
+def rule_row(rule_id: str, category: str, pattern: str, status: str) -> str:
+    """Render one rule line in the `dbnt rules` format."""
+    preview = (pattern[:30] + "...") if len(pattern) > 30 else pattern
+    return f"  {rule_id:<30s}  [{category:<10s}]  \"{preview:<33s}\"  ({status})"
+
+
+def seat_targets(seat: str | None, list_all: bool) -> list[str]:
+    """Resolve which seats a listing request names."""
+    if seat and list_all:
+        raise click.ClickException("--all takes no seat argument")
+    if list_all:
+        return list_seat_names()
+    if not seat:
+        raise click.ClickException("Missing argument 'SEAT'.")
+    return [validate_seat(seat)]
+
+
+def echo_seat_listing(seat: str, prompt: bool, engine: DecayEngine) -> None:
+    """Print one seat slice, either as a prompt block or as a decay listing."""
+    rules = load_seat_rules(seat)
+    if prompt:
+        click.echo(render_prompt_block(seat, rules))
+        return
+
+    click.echo(f"SEAT {seat} ({len(rules)}):")
+    if not rules:
+        click.echo("  none captured yet")
+        return
+    for rule in rules:
+        decay = engine.check(decay_key(seat, rule.id))
+        status = decay_label(decay["retrievability"], decay["applied_count"])
+        click.echo(rule_row(rule.id, rule.category.value, rule.pattern, status))
+
+
+def seat_decay_lines(engine: DecayEngine) -> list[str]:
+    """Build the report-only seat section used by `dbnt sweep`."""
+    lines = []
+    for seat in list_seat_names():
+        for rule in load_seat_rules(seat):
+            decay = engine.check(decay_key(seat, rule.id))
+            status = decay_label(decay["retrievability"], decay["applied_count"])
+            lines.append(f"  {seat}  {rule.id}  ({status})")
+    return lines
+
+
+@main.command("seat-capture")
+@click.argument("seat")
+@click.argument("pattern")
+@click.option(
+    "--kind", "-k",
+    type=click.Choice(["success", "failure"]),
+    default="failure",
+    show_default=True,
+    help="Seat rule direction",
+)
+@click.option(
+    "--category", "-c",
+    type=click.Choice([*SEAT_CATEGORIES[RuleType.SUCCESS], *SEAT_CATEGORIES[RuleType.FAILURE]]),
+    required=True,
+)
+@click.option("--context", "-x", default="", help="Why it failed")
+@click.option("--replace", is_flag=True, help="Update an existing seat rule for the same pattern")
+def seat_capture(
+    seat: str, pattern: str, kind: str, category: str, context: str, replace: bool
+) -> None:
+    """Encode a rule into a runner seat slice.
+
+    Example: dbnt seat-capture codex@dru "Guessed a hash" -c protocol -x "Read the file first"
+    """
+    try:
+        capture = capture_seat_rule(
+            seat=seat,
+            pattern=pattern,
+            kind=RuleType(kind),
+            category=category,
+            context=context,
+            replace_existing=replace,
+        )
+    except SeatError as error:
+        raise click.ClickException(str(error)) from error
+
+    if capture.replaced:
+        marker = "~"
+    elif capture.rule.type is RuleType.SUCCESS:
+        marker = "✓"
+    else:
+        marker = "✗"
+    click.echo(f"{marker} Seat rule {capture.rule.id} ({seat})")
+    click.echo(f"  {capture.path}")
+
+
+@main.command("seat-rules")
+@click.argument("seat", required=False)
+@click.option("--prompt", is_flag=True, help="Print only a pasteable markdown block")
+@click.option("--all", "list_all", is_flag=True, help="List every seat that has rules")
+def seat_rules(seat: str | None, prompt: bool, list_all: bool) -> None:
+    """List one seat's rules with category and decay status.
+
+    Example: dbnt seat-rules codex@dru --prompt
+    """
+    try:
+        names = seat_targets(seat, list_all)
+    except SeatError as error:
+        raise click.ClickException(str(error)) from error
+
+    learning_store = LearningStore()
+    engine = DecayEngine(learning_store)
+    try:
+        for name in names:
+            echo_seat_listing(name, prompt, engine)
+    finally:
+        learning_store.close()
+
+    if list_all and not names:
+        click.echo("No seat slices found.")
+
+
 # ─── Learning System ───────────────────────────────────────────────────────
 
 @main.command()
@@ -283,15 +432,57 @@ def patterns(domain: str | None, threshold: float, limit: int) -> None:
         click.echo(f"  Domain: {group.domain}")
 
 
+def promote_rule(seat: str | None, pattern: str, context: str, rule_type: RuleType) -> str:
+    """Promote one detected pattern into the global store or a seat slice."""
+    if seat is None:
+        if rule_type is RuleType.SUCCESS:
+            return encode_success(category="code", pattern=pattern, context=context).id
+        return encode_failure(category="protocol", pattern=pattern, context=context).id
+
+    capture = capture_seat_rule(
+        seat=seat,
+        pattern=pattern,
+        kind=rule_type,
+        category="code" if rule_type is RuleType.SUCCESS else "protocol",
+        context=context,
+        replace_existing=True,
+    )
+    return capture.rule.id
+
+
+def promote_group(store: LearningStore, group: PatternGroup, seat: str | None) -> str:
+    """Promote one qualifying pattern group and report the new rule ID."""
+    signal = detect_signal(group.representative)
+    rule_type = RuleType.SUCCESS if signal.type.value == "positive" else RuleType.FAILURE
+    rule_id = promote_rule(
+        seat,
+        group.representative,
+        f"Auto-promoted from {group.count} learnings ({group.confidence} confidence)",
+        rule_type,
+    )
+
+    member_ids = [m["id"] for m in group.members if "id" in m]
+    if member_ids:
+        store.mark_promoted(member_ids, rule_id)
+
+    click.echo(f"✓ Promoted: \"{group.representative[:60]}\" ({group.count}x → {rule_id})")
+    return rule_id
+
+
 @main.command()
 @click.option("--domain", "-d", default=None, help="Filter by domain")
 @click.option("--limit", "-l", default=200, type=int, help="Max learnings to scan (default 200)")
-def promote(domain: str | None, limit: int) -> None:
+@click.option("--seat", default=None, help="Write promoted rules into this seat slice")
+def promote(domain: str | None, limit: int, seat: str | None) -> None:
     """Auto-promote recurring patterns to rules.
 
     Patterns with 3+ occurrences become rules automatically.
     """
-    from dbnt.signals import detect_signal
+    if seat is not None:
+        try:
+            validate_seat(seat)
+        except SeatError as error:
+            raise click.ClickException(str(error)) from error
 
     with LearningStore() as store:
         learnings = store.get_unpromoted(domain=domain)
@@ -303,30 +494,9 @@ def promote(domain: str | None, limit: int) -> None:
 
         promoted = 0
         for group in groups:
-            if not group.should_promote:
-                continue
-
-            # Detect if the pattern is positive or negative
-            signal = detect_signal(group.representative)
-            if signal.type.value == "positive":
-                rule = encode_success(
-                    category="code",
-                    pattern=group.representative,
-                    context=f"Auto-promoted from {group.count} learnings ({group.confidence} confidence)",
-                )
-            else:
-                rule = encode_failure(
-                    category="protocol",
-                    pattern=group.representative,
-                    context=f"Auto-promoted from {group.count} learnings ({group.confidence} confidence)",
-                )
-
-            member_ids = [m["id"] for m in group.members if "id" in m]
-            if member_ids:
-                store.mark_promoted(member_ids, rule.id)
-
-            promoted += 1
-            click.echo(f"✓ Promoted: \"{group.representative[:60]}\" ({group.count}x → {rule.id})")
+            if group.should_promote:
+                promote_group(store, group, seat)
+                promoted += 1
 
     store.close()
 
@@ -346,8 +516,9 @@ def sweep() -> None:
 
     store = get_store()
     rules = store.load_all()
+    seats = list_seat_names()
 
-    if not rules:
+    if not rules and not seats:
         click.echo("No rules found.")
         return
 
@@ -356,6 +527,7 @@ def sweep() -> None:
 
     rule_ids = [r.id for r in rules]
     result = engine.sweep(rule_ids)
+    seat_lines = seat_decay_lines(engine)
     learning_store.close()
 
     click.echo(f"Rules: {len(rules)} total")
@@ -372,6 +544,11 @@ def sweep() -> None:
         click.echo("\nReady to archive:")
         for rid in result["archive"]:
             click.echo(f"  ✗ {rid}")
+
+    if seat_lines:
+        click.echo("\nSeat rules:")
+        for line in seat_lines:
+            click.echo(line)
 
 
 # ─── Dissonance & Status ──────────────────────────────────────────────────
@@ -446,18 +623,7 @@ def rules_cmd() -> None:
     failure_rules = []
     for rule in store.load_all():
         decay = engine.check(rule.id)
-        retrievability = decay["retrievability"]
-        if retrievability >= 0.7:
-            status = "stable"
-        elif retrievability >= 0.3:
-            status = "decaying"
-        else:
-            status = "archive"
-
-        # Boost label for highly applied rules
-        applied = decay["applied_count"]
-        if applied >= 5:
-            status = f"boosted {applied}x"
+        status = decay_label(decay["retrievability"], decay["applied_count"])
 
         entry = (rule.id, rule.category.value, rule.pattern, status)
         if rule.type.value == "success":
@@ -469,9 +635,8 @@ def rules_cmd() -> None:
 
     if success_rules:
         click.echo(f"SUCCESS RULES ({len(success_rules)}):")
-        for rule_id, cat, pattern, decay_status in success_rules:
-            preview = (pattern[:30] + "...") if len(pattern) > 30 else pattern
-            click.echo(f"  {rule_id:<30s}  [{cat:<10s}]  \"{preview:<33s}\"  ({decay_status})")
+        for entry in success_rules:
+            click.echo(rule_row(*entry))
     else:
         click.echo("SUCCESS RULES (0): none encoded yet")
 
@@ -479,14 +644,30 @@ def rules_cmd() -> None:
 
     if failure_rules:
         click.echo(f"FAILURE RULES ({len(failure_rules)}):")
-        for rule_id, cat, pattern, decay_status in failure_rules:
-            preview = (pattern[:30] + "...") if len(pattern) > 30 else pattern
-            click.echo(f"  {rule_id:<30s}  [{cat:<10s}]  \"{preview:<33s}\"  ({decay_status})")
+        for entry in failure_rules:
+            click.echo(rule_row(*entry))
     else:
         click.echo("FAILURE RULES (0): none encoded yet")
 
     total = len(success_rules) + len(failure_rules)
     click.echo(f"\nTotal: {total} rules ({len(success_rules)} success, {len(failure_rules)} failure)")
+
+
+def rule_candidates(directory: Path) -> Iterator[Path]:
+    """Yield rule files from a directory that may not exist."""
+    if directory.exists():
+        yield from directory.glob("*.md")
+
+
+def matches_rule_id(path: Path, rule_id: str) -> bool:
+    """Match a rule file on its full stem or on the rule ID portion."""
+    return path.stem == rule_id or path.stem.endswith(rule_id) or rule_id in path.stem
+
+
+def find_rule_path(store: RuleStore, rule_id: str) -> Path | None:
+    """Find the first rule file matching a rule ID across both stores."""
+    paths = chain(rule_candidates(store.success_path), rule_candidates(store.failure_path))
+    return next((path for path in paths if matches_rule_id(path, rule_id)), None)
 
 
 @main.command("show")
@@ -501,19 +682,7 @@ def show_cmd(rule_id: str) -> None:
     from dbnt.core import get_store
 
     store = get_store()
-
-    # Search both directories for the rule file
-    found_path = None
-    for directory in (store.success_path, store.failure_path):
-        if not directory.exists():
-            continue
-        for path in directory.glob("*.md"):
-            # Match on stem (full filename without .md) or just the rule_id portion
-            if path.stem == rule_id or path.stem.endswith(rule_id) or rule_id in path.stem:
-                found_path = path
-                break
-        if found_path:
-            break
+    found_path = find_rule_path(store, rule_id)
 
     if not found_path:
         click.echo(f"Rule not found: {rule_id}", err=True)

@@ -38,6 +38,15 @@ from dbnt.extract import (
 )
 from dbnt.learning import DecayEngine, DecayState, LearningStore, PatternDetector
 from dbnt.protocol import Action, Command, Protocol, ProtocolResponse
+from dbnt.seats import (
+    SeatCapture,
+    SeatError,
+    capture_seat_rule,
+    load_seat_rules,
+    render_prompt_block,
+    seat_rules_dir,
+    validate_seat,
+)
 from dbnt.signals.detector import Signal, SignalStrength, SignalType, detect_signal
 from dbnt.state import resolve_state_root
 
@@ -81,6 +90,14 @@ __all__ = [
     "extract_from_transcript",
     "ExtractedLearning",
     "LearningType",
+    # Seats
+    "capture_seat_rule",
+    "load_seat_rules",
+    "render_prompt_block",
+    "seat_rules_dir",
+    "validate_seat",
+    "SeatCapture",
+    "SeatError",
     # Signals
     "detect_signal",
     "Signal",
