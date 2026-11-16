@@ -131,6 +131,58 @@ class RegressionResult:
         return not self.failures
 
 
+_AUTHORITY_TRIGGERS: frozenset[Boundary] = frozenset({
+    Boundary.EXTERNAL,
+    Boundary.IRREVERSIBLE,
+    Boundary.CREDENTIAL,
+    Boundary.PRIVACY,
+    Boundary.AUTHORITY,
+})
+
+
+def _early_drop(proposal: ActionProposal) -> AgencyDecision | None:
+    if not proposal.advances_outcome:
+        return AgencyDecision(
+            disposition=Disposition.DROP,
+            reasons=("does not advance the stated outcome",),
+        )
+    if proposal.effect is Effect.OBSERVE and not proposal.produces_evidence:
+        return AgencyDecision(
+            disposition=Disposition.DROP,
+            reasons=("produces neither a state change nor decision-grade evidence",),
+        )
+    return None
+
+
+def _required_boundaries(proposal: ActionProposal) -> set[Boundary]:
+    required = set(proposal.boundaries)
+    if proposal.effect is Effect.EXTERNAL_MUTATION:
+        required.add(Boundary.EXTERNAL)
+    if not proposal.reversible:
+        required.add(Boundary.IRREVERSIBLE)
+    if required & _AUTHORITY_TRIGGERS:
+        required.add(Boundary.AUTHORITY)
+    required.discard(Boundary.CURRENT_STATE)
+    return required
+
+
+def _unmet_boundaries(proposal: ActionProposal) -> set[Boundary]:
+    required = _required_boundaries(proposal)
+    unmet: set[Boundary] = set()
+    if not proposal.in_scope:
+        unmet.add(Boundary.SCOPE)
+    unmet.update(required - set(proposal.authorized_boundaries))
+    if Boundary.AUTHORITY in required:
+        if proposal.authority_verified:
+            unmet.discard(Boundary.AUTHORITY)
+        else:
+            unmet.add(Boundary.AUTHORITY)
+    needs_state = proposal.requires_current_state or Boundary.CURRENT_STATE in proposal.boundaries
+    if needs_state and not proposal.current_state_verified:
+        unmet.add(Boundary.CURRENT_STATE)
+    return unmet
+
+
 def classify_action(proposal: ActionProposal) -> AgencyDecision:
     """Classify a proposal as MOVE, GATE, or DROP.
 
@@ -138,52 +190,11 @@ def classify_action(proposal: ActionProposal) -> AgencyDecision:
     before boundary analysis, preventing ceremony from manufacturing a reason
     to ask the human for another decision.
     """
+    drop = _early_drop(proposal)
+    if drop is not None:
+        return drop
 
-    if not proposal.advances_outcome:
-        return AgencyDecision(
-            disposition=Disposition.DROP,
-            reasons=("does not advance the stated outcome",),
-        )
-
-    if proposal.effect is Effect.OBSERVE and not proposal.produces_evidence:
-        return AgencyDecision(
-            disposition=Disposition.DROP,
-            reasons=("produces neither a state change nor decision-grade evidence",),
-        )
-
-    unmet: set[Boundary] = set()
-    if not proposal.in_scope:
-        unmet.add(Boundary.SCOPE)
-
-    required = set(proposal.boundaries)
-    if proposal.effect is Effect.EXTERNAL_MUTATION:
-        required.add(Boundary.EXTERNAL)
-    if not proposal.reversible:
-        required.add(Boundary.IRREVERSIBLE)
-
-    authority_trigger = {
-        Boundary.EXTERNAL,
-        Boundary.IRREVERSIBLE,
-        Boundary.CREDENTIAL,
-        Boundary.PRIVACY,
-        Boundary.AUTHORITY,
-    }
-    if required & authority_trigger:
-        required.add(Boundary.AUTHORITY)
-
-    required.discard(Boundary.CURRENT_STATE)
-    unmet.update(required - set(proposal.authorized_boundaries))
-    if Boundary.AUTHORITY in required:
-        if proposal.authority_verified:
-            unmet.discard(Boundary.AUTHORITY)
-        else:
-            unmet.add(Boundary.AUTHORITY)
-
-    if (
-        proposal.requires_current_state or Boundary.CURRENT_STATE in proposal.boundaries
-    ) and not proposal.current_state_verified:
-        unmet.add(Boundary.CURRENT_STATE)
-
+    unmet = _unmet_boundaries(proposal)
     if unmet:
         ordered = tuple(boundary for boundary in Boundary if boundary in unmet)
         return AgencyDecision(
