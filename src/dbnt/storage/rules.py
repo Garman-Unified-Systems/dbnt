@@ -32,7 +32,12 @@ def parse_rule_file(path: Path) -> Rule | None:
     rule_id = path.stem
 
     # Extract key sections
-    pattern = _extract_section(content, "Pattern") or _extract_section(content, "Pattern to Avoid") or _extract_section(content, "Pattern That Worked") or ""
+    pattern = (
+        _extract_section(content, "Pattern")
+        or _extract_section(content, "Pattern to Avoid")
+        or _extract_section(content, "Pattern That Worked")
+        or ""
+    )
     context = _extract_section(content, "Context") or _extract_section(content, "Trigger") or ""
 
     # If no structured sections, use the whole body as context

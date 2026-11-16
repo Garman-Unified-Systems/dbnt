@@ -215,15 +215,14 @@ def evaluate_cases(cases: Iterable[RegressionCase]) -> RegressionResult:
     for case in cases:
         total += 1
         decision = classify_action(case.proposal)
-        if decision.disposition is not case.expected:
-            failures.append(
-                RegressionFailure(
-                    case_name=case.name,
-                    expected=case.expected,
-                    actual=decision.disposition,
-                    reasons=decision.reasons,
-                )
-            )
+        if decision.disposition is case.expected:
+            continue
+        failures.append(RegressionFailure(
+            case_name=case.name,
+            expected=case.expected,
+            actual=decision.disposition,
+            reasons=decision.reasons,
+        ))
     return RegressionResult(
         total=total,
         passing=total - len(failures),

@@ -94,7 +94,8 @@ def score() -> None:
     if state.events:
         click.echo("\nRecent:")
         for event in state.events[-5:]:
-            click.echo(f"  {event['command'].upper():5s} {event['points']:+.1f}  {event['timestamp'][:19]}")
+            line = f"  {event['command'].upper():5s} {event['points']:+.1f}  {event['timestamp'][:19]}"
+            click.echo(line)
 
 
 @main.command("agency-check")
