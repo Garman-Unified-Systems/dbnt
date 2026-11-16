@@ -78,13 +78,14 @@ class ClaudeCodeAdapter(BaseAdapter):
             return False
         for plugin_dir in plugins_dir.iterdir():
             manifest = plugin_dir / ".claude-plugin" / "plugin.json"
-            if manifest.exists():
-                try:
-                    data = json.loads(manifest.read_text())
-                    if data.get("name") == "dbnt":
-                        return True
-                except (json.JSONDecodeError, OSError):
-                    continue
+            if not manifest.exists():
+                continue
+            try:
+                data = json.loads(manifest.read_text())
+            except (json.JSONDecodeError, OSError):
+                continue
+            if data.get("name") == "dbnt":
+                return True
         return False
 
     def get_rules_path(self) -> Path:
@@ -300,10 +301,13 @@ exit 0
         if event not in settings["hooks"]:
             settings["hooks"][event] = []
 
-        for entry in settings["hooks"][event]:
-            for hook in entry.get("hooks", []):
-                if hook.get("command") == command:
-                    return  # Already registered
+        already = any(
+            hook.get("command") == command
+            for entry in settings["hooks"][event]
+            for hook in entry.get("hooks", [])
+        )
+        if already:
+            return
 
         settings["hooks"][event].append(
             {"hooks": [{"type": "command", "command": command}]}
