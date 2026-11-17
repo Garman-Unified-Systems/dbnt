@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
+**Status:** Beta — 0.6.0 release candidate; PyPI package live
+
 **Release status:** this source revision declares `0.6.0` as a release
 candidate. The PyPI badge above reports the live published package; a source
 version is not a publication claim. The DBNT x ABCD skill has its own release
