@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import math
+import os
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from dbnt.state import resolve_state_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class Command(Enum):
@@ -41,11 +49,15 @@ class ProtocolResponse:
     should_encode: bool = False
 
 
+class ScoreStateSchemaError(ValueError):
+    """Raised when decoded score JSON does not satisfy the persisted schema."""
+
+
 @dataclass
 class ScoreState:
     """Persistent scoring state."""
     total_points: float = 0.0
-    events: list[dict] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
     tweak_count: int = 0  # Track consecutive tweaks
 
     def add_event(self, command: Command, points: float) -> None:
@@ -58,11 +70,17 @@ class ScoreState:
 
     @property
     def success_count(self) -> int:
-        return sum(1 for e in self.events if e["points"] > 0)
+        return sum(
+            1 for e in self.events
+            if e.get("points", e.get("delta", e.get("score", e.get("weight", 0)))) > 0
+        )
 
     @property
     def failure_count(self) -> int:
-        return sum(1 for e in self.events if e["points"] < 0)
+        return sum(
+            1 for e in self.events
+            if e.get("points", e.get("delta", e.get("score", e.get("weight", 0)))) < 0
+        )
 
     @property
     def success_rate(self) -> float:
@@ -75,7 +93,7 @@ class ScoreState:
 # Command detection patterns
 # These are designed for SHORT directive messages, not natural language parsing.
 # For NL signal detection, use signals.detector instead.
-_PATTERNS: list[tuple[Command, re.Pattern]] = [
+_PATTERNS: list[tuple[Command, re.Pattern[str]]] = [
     # Order matters: most specific first
     # DB-family commands must appear at START of message to avoid false positives
     (Command.DBYC, re.compile(r"^\s*dbyc(?:\s|$|[.!])", re.IGNORECASE)),
@@ -136,7 +154,7 @@ class Protocol:
     """
 
     def __init__(self, state_dir: Path | None = None):
-        self.state_dir = state_dir or Path.home() / ".dbnt"
+        self.state_dir = resolve_state_root(state_dir)
         self.score_path = self.state_dir / "score.json"
         self._state: ScoreState | None = None
 
@@ -211,12 +229,19 @@ class Protocol:
             return ScoreState()
         try:
             data = json.loads(self.score_path.read_text())
+            if not isinstance(data, dict):
+                raise ScoreStateSchemaError("score state must be a JSON object")
+
+            total_points = _score_number(data.get("total_points", 0.0), "total_points")
+            events = _score_events(data.get("events", []))
+            tweak_count = _nonnegative_count(data.get("tweak_count", 0), "tweak_count")
             return ScoreState(
-                total_points=data.get("total_points", 0.0),
-                events=data.get("events", []),
-                tweak_count=data.get("tweak_count", 0),
+                total_points=total_points,
+                events=events,
+                tweak_count=tweak_count,
             )
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, OSError, ScoreStateSchemaError) as exc:
+            self._quarantine_corrupt_score(exc)
             return ScoreState()
 
     def _save_state(self) -> None:
@@ -228,4 +253,62 @@ class Protocol:
             "tweak_count": self.state.tweak_count,
             "last_updated": datetime.now(timezone.utc).isoformat(),
         }
-        self.score_path.write_text(json.dumps(data, indent=2))
+        tmp_path = self.score_path.with_name(f"{self.score_path.name}.{os.getpid()}.tmp")
+        tmp_path.write_text(json.dumps(data, indent=2))
+        tmp_path.replace(self.score_path)
+
+    def _quarantine_corrupt_score(self, exc: Exception) -> None:
+        """Move an unreadable score file aside before starting fresh."""
+        if not self.score_path.exists():
+            return
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        quarantine_path = self.score_path.with_name(
+            f"{self.score_path.name}.corrupt-{timestamp}-{os.getpid()}"
+        )
+        try:
+            self.score_path.replace(quarantine_path)
+        except OSError:
+            return
+
+        note_path = quarantine_path.with_name(f"{quarantine_path.name}.reason")
+        with contextlib.suppress(OSError):
+            note_path.write_text(f"{type(exc).__name__}: {exc}\n")
+
+
+def _score_number(value: object, field_name: str) -> float:
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (int, float))
+        or not math.isfinite(value)
+    ):
+        raise ScoreStateSchemaError(f"{field_name} must be a finite number")
+    return float(value)
+
+
+def _nonnegative_count(value: object, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ScoreStateSchemaError(f"{field_name} must be a nonnegative integer")
+    return value
+
+
+def _score_events(value: object) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise ScoreStateSchemaError("events must be an array")
+
+    events: list[dict[str, Any]] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            raise ScoreStateSchemaError(f"events[{index}] must be an object")
+        event: dict[str, Any] = dict(item)
+        for numeric_field in ("points", "delta", "score", "weight"):
+            if numeric_field in event:
+                _score_number(event[numeric_field], f"events[{index}].{numeric_field}")
+        if "points" not in event and "delta" in event:
+            event = {
+                **event,
+                "points": event["delta"],
+                "command": event.get("event", "unknown"),
+            }
+        events.append(event)
+    return events

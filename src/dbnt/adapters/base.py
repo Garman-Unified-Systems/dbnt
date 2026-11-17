@@ -1,13 +1,30 @@
 """Base adapter interface."""
 
-from abc import ABC, abstractmethod
-from pathlib import Path
+from __future__ import annotations
 
-from dbnt.core import Rule
+from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING, TypeVar
+
+from dbnt.agency import enforce_action
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from pathlib import Path
+
+    from dbnt.agency import ActionProposal
+    from dbnt.core import Rule
+
+T = TypeVar("T")
 
 
 class BaseAdapter(ABC):
     """Base class for DBNT adapters."""
+
+    def run_action(self, proposal: ActionProposal, action: Callable[[], T]) -> T:
+        """Execute a callback only after the bounded-agency policy returns MOVE."""
+
+        enforce_action(proposal)
+        return action()
 
     @abstractmethod
     def install(self) -> None:

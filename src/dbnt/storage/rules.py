@@ -12,6 +12,26 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _extract_pattern(content: str) -> str:
+    return (
+        _extract_section(content, "Pattern")
+        or _extract_section(content, "Pattern to Avoid")
+        or _extract_section(content, "Pattern That Worked")
+        or ""
+    )
+
+
+def _extract_context(content: str) -> str:
+    return _extract_section(content, "Context") or _extract_section(content, "Trigger") or ""
+
+
+def _fallback_body(content: str) -> tuple[str, str]:
+    lines = content.strip().split("\n")
+    context = "\n".join(lines[1:]).strip()
+    pattern = lines[0].lstrip("# ") if lines else ""
+    return pattern, context
+
+
 def parse_rule_file(path: Path) -> Rule | None:
     """Parse a markdown rule file back into a Rule object.
 
@@ -26,27 +46,19 @@ def parse_rule_file(path: Path) -> Rule | None:
     except OSError:
         return None
 
-    # Extract metadata from frontmatter or headings
     rule_type = _detect_type(path, content)
     category = _detect_category(path, content)
     rule_id = path.stem
 
-    # Extract key sections
-    pattern = _extract_section(content, "Pattern") or _extract_section(content, "Pattern to Avoid") or _extract_section(content, "Pattern That Worked") or ""
-    context = _extract_section(content, "Context") or _extract_section(content, "Trigger") or ""
+    pattern = _extract_pattern(content)
+    context = _extract_context(content)
 
-    # If no structured sections, use the whole body as context
     if not pattern and not context:
-        # Strip the heading and use rest as context
-        lines = content.strip().split("\n")
-        context = "\n".join(lines[1:]).strip()
-        pattern = lines[0].lstrip("# ") if lines else ""
+        pattern, context = _fallback_body(content)
 
-    # Extract dates
     created = _extract_date(content) or datetime.now(timezone.utc)
     source = _extract_field(content, "Source") or _extract_field(content, "Session")
 
-    # Extract weight
     weight_str = _extract_field(content, "Weight")
     weight = float(weight_str) if weight_str else (1.5 if rule_type == RuleType.SUCCESS else 1.0)
 
@@ -64,7 +76,7 @@ def parse_rule_file(path: Path) -> Rule | None:
 
 def load_rules_from_dir(directory: Path) -> list[Rule]:
     """Load all rule files from a directory."""
-    rules = []
+    rules: list[Rule] = []
     if not directory.exists():
         return rules
     for path in sorted(directory.glob("*.md")):

@@ -7,7 +7,12 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
-from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+from dbnt.state import resolve_state_root
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # ─── FSRS-6 Simplified Decay ───────────────────────────────────────────────
 
@@ -68,7 +73,7 @@ class DecayState:
         self.applied_count += 1
         self.review(3)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "stability": round(self.stability, 3),
             "difficulty": round(self.difficulty, 3),
@@ -78,7 +83,7 @@ class DecayState:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> DecayState:
+    def from_dict(cls, data: dict[str, Any]) -> DecayState:
         state = cls(
             stability=data.get("stability", 1.0),
             difficulty=data.get("difficulty", 0.5),
@@ -119,14 +124,36 @@ CREATE TABLE IF NOT EXISTS rule_decay (
 
 CREATE INDEX IF NOT EXISTS idx_learnings_domain ON learnings(domain);
 CREATE INDEX IF NOT EXISTS idx_learnings_promoted ON learnings(promoted_to);
+CREATE INDEX IF NOT EXISTS idx_learnings_session_text ON learnings(session_id);
+CREATE INDEX IF NOT EXISTS idx_learnings_dedup_key ON learnings(LOWER(SUBSTR(TRIM(text), 1, 80)));
 """
+
+
+# Patterns that indicate system-prompt or tool-suggestion contamination.
+# These strings appear in Claude's internal system reminders and shell command
+# suggestions — never from real user feedback. Entries matching any pattern
+# are silently dropped in LearningStore.add().
+_CONTAMINATION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(r"^Use tool_use:", re.IGNORECASE),
+    re.compile(r"^Use Bash to run", re.IGNORECASE),
+    re.compile(r"respond to these messages or otherwise consider", re.IGNORECASE),
+    re.compile(r"system.reminder", re.IGNORECASE),
+    re.compile(r"<system-reminder>", re.IGNORECASE),
+    re.compile(r"IMPORTANT:.*after completing", re.IGNORECASE),
+    re.compile(r"task.notification", re.IGNORECASE),
+]
+
+
+def _is_contaminated(text: str) -> bool:
+    """Return True if text looks like system-prompt or tool-suggestion noise."""
+    return any(pattern.search(text) for pattern in _CONTAMINATION_PATTERNS)
 
 
 class LearningStore:
     """SQLite-backed learning storage. Supports context manager protocol."""
 
     def __init__(self, db_path: Path | None = None):
-        self.db_path = db_path or Path.home() / ".dbnt" / "learnings.db"
+        self.db_path = db_path if db_path is not None else resolve_state_root() / "learnings.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._conn: sqlite3.Connection | None = None
         self._init_db()
@@ -134,7 +161,7 @@ class LearningStore:
     def __enter__(self) -> LearningStore:
         return self
 
-    def __exit__(self, *args: object) -> None:
+    def __exit__(self, *_args: object) -> None:  # pyright: ignore[reportUnusedParameter]
         self.close()
 
     @property
@@ -155,8 +182,47 @@ class LearningStore:
         domain: str = "general",
         importance: float = 1.0,
         session_id: str | None = None,
+        cross_session_dedup: bool = True,
     ) -> int:
-        """Add a learning. Returns the learning ID."""
+        """Add a learning. Returns the learning ID.
+
+        Dedup logic (both checks use the first 80 normalized chars):
+        1. Cross-session dedup (default ON): if identical text already exists in
+           ANY session, return the existing ID without inserting. This prevents
+           the same pattern being re-extracted in every new session and inflating
+           the pattern detector's counts.
+        2. Within-session dedup: if the same text appears twice in the same
+           session, return the existing ID. Runs even when cross_session_dedup
+           is False.
+
+        Set cross_session_dedup=False to allow the same text to accumulate
+        across sessions (e.g. for explicit frequency tracking).
+        """
+        if _is_contaminated(text):
+            return -1  # silently drop; -1 signals "not stored" without raising
+
+        key = text.strip().lower()[:80]
+
+        if cross_session_dedup and session_id is not None:
+            # Only dedup across sessions when we have a session_id to anchor to.
+            # Sessionless calls (session_id=None) are anonymous/stateless — deduping
+            # them against all prior sessions would silently suppress inserts with no
+            # way for the caller to reason about which session owns the original row.
+            existing = self.conn.execute(
+                "SELECT id FROM learnings WHERE LOWER(SUBSTR(TRIM(text), 1, 80)) = ?",
+                (key,),
+            ).fetchone()
+            if existing:
+                return int(existing["id"])  # skip cross-session duplicate
+
+        if session_id:
+            existing = self.conn.execute(
+                "SELECT id FROM learnings WHERE session_id = ? AND LOWER(SUBSTR(TRIM(text), 1, 80)) = ?",
+                (session_id, key),
+            ).fetchone()
+            if existing:
+                return int(existing["id"])  # skip within-session duplicate
+
         cursor = self.conn.execute(
             "INSERT INTO learnings (text, source, domain, importance, created_at, session_id) "
             "VALUES (?, ?, ?, ?, ?, ?)",
@@ -164,9 +230,9 @@ class LearningStore:
              datetime.now(timezone.utc).isoformat(), session_id),
         )
         self.conn.commit()
-        return cursor.lastrowid  # type: ignore[return-value]
+        return cursor.lastrowid or -1
 
-    def get_unpromoted(self, domain: str | None = None) -> list[dict]:
+    def get_unpromoted(self, domain: str | None = None) -> list[dict[str, Any]]:
         """Get learnings not yet promoted to rules."""
         if domain:
             rows = self.conn.execute(
@@ -188,7 +254,7 @@ class LearningStore:
         placeholders = ",".join("?" * len(learning_ids))
         self.conn.execute(
             f"UPDATE learnings SET promoted_to = ? WHERE id IN ({placeholders})",
-            [rule_id] + learning_ids,
+            [rule_id, *learning_ids],
         )
         self.conn.commit()
 
@@ -232,7 +298,7 @@ class LearningStore:
 class PatternGroup:
     """A group of similar learnings that may warrant a rule."""
     representative: str        # Most common/central text
-    members: list[dict]        # Learning dicts
+    members: list[dict[str, Any]]  # Learning dicts
     confidence: str            # low/medium/high
     count: int
     domain: str
@@ -241,6 +307,14 @@ class PatternGroup:
     def should_promote(self) -> bool:
         """3+ occurrences = promote to rule."""
         return self.count >= 3
+
+
+def _confidence_for_count(count: int) -> str:
+    if count >= 10:
+        return "high"
+    if count >= 5:
+        return "medium"
+    return "low"
 
 
 class PatternDetector:
@@ -267,7 +341,7 @@ class PatternDetector:
             None, self._normalize(a), self._normalize(b)
         ).ratio()
 
-    def detect(self, learnings: list[dict]) -> list[PatternGroup]:
+    def detect(self, learnings: list[dict[str, Any]]) -> list[PatternGroup]:
         """Group similar learnings into patterns.
 
         Returns PatternGroups sorted by count (highest first).
@@ -275,7 +349,7 @@ class PatternDetector:
         if not learnings:
             return []
 
-        groups: list[list[dict]] = []
+        groups: list[list[dict[str, Any]]] = []
         used: set[int] = set()
 
         for i, learning in enumerate(learnings):
@@ -288,9 +362,10 @@ class PatternDetector:
             for j, other in enumerate(learnings[i + 1:], start=i + 1):
                 if j in used:
                     continue
-                if self._similarity(learning["text"], other["text"]) >= self.threshold:
-                    group.append(other)
-                    used.add(j)
+                if self._similarity(learning["text"], other["text"]) < self.threshold:
+                    continue
+                group.append(other)
+                used.add(j)
 
             groups.append(group)
 
@@ -304,12 +379,7 @@ class PatternDetector:
             representative = max(group, key=lambda x: len(x["text"]))
 
             count = len(group)
-            if count >= 10:
-                confidence = "high"
-            elif count >= 5:
-                confidence = "medium"
-            else:
-                confidence = "low"
+            confidence = _confidence_for_count(count)
 
             domain = group[0].get("domain", "general")
 
@@ -352,7 +422,7 @@ class DecayEngine:
         self.store.save_decay_state(rule_id, state)
         return state
 
-    def check(self, rule_id: str) -> dict:
+    def check(self, rule_id: str) -> dict[str, Any]:
         """Check a rule's health. Returns status dict."""
         state = self.store.get_decay_state(rule_id)
         r = state.retrievability()

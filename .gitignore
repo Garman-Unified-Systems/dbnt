@@ -59,3 +59,7 @@ coverage.xml
 
 # UV
 uv.lock
+
+# LLM instruction files — local only (public repo)
+AGENTS.md
+CLAUDE.md

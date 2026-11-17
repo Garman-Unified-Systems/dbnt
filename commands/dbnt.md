@@ -23,7 +23,7 @@ dbnt $ARGUMENTS
 
 - `status` — Full system overview (score, rules, learnings)
 - `rules` — List all active rules with decay status
-- `sweep` — Run FSRS decay check, archive stale rules
+- `sweep` — Report FSRS-inspired healthy/review/archive categories; does not move files
 - `detect "text"` — Classify a natural language signal
 - `score` — View scoring history
 - `patterns` — Show recurring learning patterns

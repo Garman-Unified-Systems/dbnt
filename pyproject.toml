@@ -1,16 +1,16 @@
 [project]
 name = "dbnt"
-version = "0.5.0"
+version = "0.6.0"
 description = "Universal feedback protocol and learning system for AI agents. Turn corrections into persistent, weighted rules."
 readme = "README.md"
 license = "MIT"
 authors = [
-    { name = "Dru Garman", email = "drewgarman@gmail.com" }
+    { name = "Drew Garman", email = "drewgarman@gmail.com" }
 ]
 requires-python = ">=3.10"
 keywords = ["ai", "agents", "learning", "feedback", "reinforcement", "llm", "claude", "autonomous", "memory", "swarm", "protocol", "rules"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
@@ -32,10 +32,13 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "build>=1.2",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.1.0",
+    "twine>=5.0",
     "mypy>=1.0",
+    "lizard==1.24.0",
 ]
 
 # Future adapter packages
@@ -53,11 +56,11 @@ claude-code = "dbnt.adapters.claude_code:ClaudeCodeAdapter"
 generic = "dbnt.adapters.generic:GenericAdapter"
 
 [project.urls]
-Homepage = "https://github.com/idirectships/dbnt"
-Repository = "https://github.com/idirectships/dbnt"
-Documentation = "https://github.com/idirectships/dbnt#readme"
-Issues = "https://github.com/idirectships/dbnt/issues"
-Changelog = "https://github.com/idirectships/dbnt/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Garman-Unified-Systems/dbnt"
+Repository = "https://github.com/Garman-Unified-Systems/dbnt"
+Documentation = "https://github.com/Garman-Unified-Systems/dbnt#readme"
+Issues = "https://github.com/Garman-Unified-Systems/dbnt/issues"
+Changelog = "https://github.com/Garman-Unified-Systems/dbnt/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["hatchling"]

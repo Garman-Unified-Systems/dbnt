@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Deterministic bounded-agency policy for MOVE/GATE/DROP action classification
+- Structured execution-boundary model covering scope, current state, external effects, irreversibility, credentials, privacy, and authority
+- Built-in regression cases for overstep/passivity oscillation, duplicate permission loops, and stale artifact execution
+- `dbnt agency-check` command for running the bounded-agency regression suite
+- Runtime `dbnt agency-decide` command and adapter `run_action()` enforcement path
+- Mandatory action-effect typing and separately verified authority for external, irreversible, credential, or privacy boundaries
+- Runner seat slices under `$DBNT_DIR/rules/seats/<seat>/` with validated `name@node` seat resolution, `dbnt seat-capture`, `dbnt seat-rules`, and `--prompt` export
+
+### 0.6.0 release candidate
+
+### Added
+- One state-root resolver used by rule storage, learning storage, protocol state,
+  generic and Claude Code adapters, and generated hooks
+- `DBNT_DIR` support with the backwards-compatible `~/.dbnt` default
+- Release validation for source/metadata version agreement and exact `vX.Y.Z`
+  tag matching
+
+### Changed
+- PyPI publication is tag-only; the build must pass tests, version validation,
+  distribution metadata checks, and artifact validation before trusted publishing
+- Documentation now distinguishes package behavior from the separately versioned
+  DBNT x ABCD skill and labels multi-agent propagation as roadmap work
+- `dbnt sweep` is documented as a report-only operation; it does not archive files
+
+### Fixed
+- Claude Code hooks and canonical package stores now honor `DBNT_DIR`; the
+  adapter's existing `~/.claude/rules` host mirror remains compatible
+- Generated and source-plugin hooks emit Claude Code's supported allow schema
+- Corrupt score state is quarantined before a clean state is created
+- Public category choices reject invalid success/failure taxonomies
+
+### Deferred
+- Expanded integration surfaces remain outside 0.6.0 and require separate
+  compatibility review
+
+## [0.5.3] - 2026-07-02
+### Fixed
+- `lastrowid` null-safety in `LearningStore.add()` — returns `-1` instead of `None` on insert failure
+### Changed
+- Classifier promoted from `Development Status :: 3 - Alpha` to `4 - Beta`
+
+## [0.5.2] - 2026-03-20
+### Added
+- `--limit` flag on `dbnt patterns` and `dbnt promote` (default 200) to cap SequenceMatcher comparisons
+### Fixed
+- O(n²) hang in `dbnt patterns` / `dbnt promote` with 2500+ entries — SequenceMatcher over full store now capped
+- `_load_state` migrates legacy score events with `delta` key to current `points` schema at load time
+- KeyError: 'points' when loading legacy score events with `delta` key schema
+- Learning contamination: filter added to reject system-reminder and tool-suggestion text
+
+## [0.5.1] - 2026-03-17
+### Added
+- Session-level dedup in LearningStore.add()
+- pyrightconfig.json for Pyright static analysis
+### Fixed
+- Pyright diagnostic on __exit__ signature
+
 ## [0.5.0] - 2026-03-15
 
 ### Added

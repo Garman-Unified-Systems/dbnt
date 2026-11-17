@@ -4,6 +4,21 @@ Universal learning protocol for AI systems.
 Feedback-driven. Signal-driven. Learning-driven.
 """
 
+from dbnt.agency import (
+    ActionProposal,
+    ActionRejectedError,
+    AgencyDecision,
+    Boundary,
+    Disposition,
+    Effect,
+    RegressionCase,
+    RegressionFailure,
+    RegressionResult,
+    classify_action,
+    default_regression_cases,
+    enforce_action,
+    evaluate_cases,
+)
 from dbnt.core import (
     Category,
     DissonanceResult,
@@ -23,10 +38,33 @@ from dbnt.extract import (
 )
 from dbnt.learning import DecayEngine, DecayState, LearningStore, PatternDetector
 from dbnt.protocol import Action, Command, Protocol, ProtocolResponse
+from dbnt.seats import (
+    SeatCapture,
+    SeatError,
+    capture_seat_rule,
+    load_seat_rules,
+    render_prompt_block,
+    seat_rules_dir,
+    validate_seat,
+)
 from dbnt.signals.detector import Signal, SignalStrength, SignalType, detect_signal
+from dbnt.state import resolve_state_root
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
+    "classify_action",
+    "enforce_action",
+    "evaluate_cases",
+    "default_regression_cases",
+    "ActionProposal",
+    "ActionRejectedError",
+    "AgencyDecision",
+    "Boundary",
+    "Disposition",
+    "Effect",
+    "RegressionCase",
+    "RegressionFailure",
+    "RegressionResult",
     # Core
     "encode_success",
     "encode_failure",
@@ -52,9 +90,19 @@ __all__ = [
     "extract_from_transcript",
     "ExtractedLearning",
     "LearningType",
+    # Seats
+    "capture_seat_rule",
+    "load_seat_rules",
+    "render_prompt_block",
+    "seat_rules_dir",
+    "validate_seat",
+    "SeatCapture",
+    "SeatError",
     # Signals
     "detect_signal",
     "Signal",
     "SignalType",
     "SignalStrength",
+    # State
+    "resolve_state_root",
 ]
