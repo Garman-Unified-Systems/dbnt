@@ -309,6 +309,14 @@ class PatternGroup:
         return self.count >= 3
 
 
+def _confidence_for_count(count: int) -> str:
+    if count >= 10:
+        return "high"
+    if count >= 5:
+        return "medium"
+    return "low"
+
+
 class PatternDetector:
     """Groups similar learnings and detects recurring patterns.
 
@@ -354,9 +362,10 @@ class PatternDetector:
             for j, other in enumerate(learnings[i + 1:], start=i + 1):
                 if j in used:
                     continue
-                if self._similarity(learning["text"], other["text"]) >= self.threshold:
-                    group.append(other)
-                    used.add(j)
+                if self._similarity(learning["text"], other["text"]) < self.threshold:
+                    continue
+                group.append(other)
+                used.add(j)
 
             groups.append(group)
 
@@ -370,12 +379,7 @@ class PatternDetector:
             representative = max(group, key=lambda x: len(x["text"]))
 
             count = len(group)
-            if count >= 10:
-                confidence = "high"
-            elif count >= 5:
-                confidence = "medium"
-            else:
-                confidence = "low"
+            confidence = _confidence_for_count(count)
 
             domain = group[0].get("domain", "general")
 
