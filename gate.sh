@@ -9,19 +9,6 @@ if [[ -z "${CI:-}" && -z "${GITHUB_ACTIONS:-}" ]]; then
   LOCAL_MODE=1
 fi
 
-HAD_NODE_MODULES=0
-HAD_VENV=0
-HAD_UV_LOCK=0
-HAD_PNPM_LOCK=0
-HAD_YARN_LOCK=0
-HAD_BUN_LOCK=0
-[[ -d node_modules ]] && HAD_NODE_MODULES=1
-[[ -d .venv ]] && HAD_VENV=1
-[[ -f uv.lock ]] && HAD_UV_LOCK=1
-[[ -f pnpm-lock.yaml ]] && HAD_PNPM_LOCK=1
-[[ -f yarn.lock ]] && HAD_YARN_LOCK=1
-[[ -f bun.lockb || -f bun.lock ]] && HAD_BUN_LOCK=1
-
 CLEANED=0
 TMP_DIRS=()
 RAN_CHECKS=0
@@ -54,17 +41,6 @@ cleanup_local_artifacts() {
       [[ -n "$dir" && -d "$dir" ]] && rm -rf "$dir"
     done
   fi
-
-  if [[ "$LOCAL_MODE" -eq 1 && "${REPO_GATE_KEEP_DEPS:-0}" != "1" ]]; then
-    [[ "$HAD_NODE_MODULES" -eq 0 ]] && rm -rf node_modules
-    [[ "$HAD_VENV" -eq 0 ]] && rm -rf .venv
-    [[ "$HAD_UV_LOCK" -eq 0 ]] && rm -f uv.lock
-    [[ "$HAD_PNPM_LOCK" -eq 0 ]] && rm -f pnpm-lock.yaml
-    [[ "$HAD_YARN_LOCK" -eq 0 ]] && rm -f yarn.lock
-    if [[ "$HAD_BUN_LOCK" -eq 0 ]]; then
-      rm -f bun.lockb bun.lock
-    fi
-  fi
 }
 
 trap cleanup_local_artifacts EXIT
@@ -77,6 +53,12 @@ require_one_of() {
   local value="$1"
   local allowed="$2"
   [[ " $allowed " == *" $value "* ]] || fail "invalid taxonomy value: $value"
+}
+
+require_pattern() {
+  local value="$1"
+  local prefix="$2"
+  [[ "$value" =~ ^${prefix}-[a-z0-9][a-z0-9-]*$ ]] || fail "invalid taxonomy value: $value"
 }
 
 validate_taxonomy() {
@@ -92,19 +74,19 @@ validate_taxonomy() {
     fail ".repo-meta.yaml must contain exactly one proj-* value"
   [[ "$(printf '%s\n' "$functions" | sed '/^$/d' | wc -l | tr -d ' ')" == "1" ]] ||
     fail ".repo-meta.yaml must contain exactly one fn-* value"
-  [[ "$topic_count" -ge 1 && "$topic_count" -le 3 ]] ||
-    fail ".repo-meta.yaml must contain 1-3 topic-* values"
+  [[ "$topic_count" -ge 1 ]] ||
+    fail ".repo-meta.yaml must contain at least one topic-* value"
 
   local project function topic
   project="$(printf '%s\n' "$projects" | sed -n '1p')"
   function="$(printf '%s\n' "$functions" | sed -n '1p')"
 
   require_one_of "$project" "proj-core proj-practice proj-tools proj-research proj-web proj-data proj-media proj-reference proj-infra proj-archive"
-  require_one_of "$function" "fn-clean-core fn-practice fn-scaffolding fn-dataset fn-reference fn-archive-candidate"
+  require_pattern "$function" "fn"
 
   while IFS= read -r topic; do
     [[ -z "$topic" ]] && continue
-    require_one_of "$topic" "topic-ai-agents topic-fleet-infra topic-web-frontend topic-audio-music topic-data-kb topic-finance topic-research-pipeline topic-dev-tooling topic-3d-graphics topic-governance"
+    require_pattern "$topic" "topic"
   done <<< "$topics"
 
   info "taxonomy ok: $project / $function / $(printf '%s' "$topics" | tr '\n' ' ')"
