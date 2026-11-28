@@ -49,6 +49,12 @@ meta_tokens() {
   sed 's/#.*//' .repo-meta.yaml | grep -Eo "$1-[a-z0-9-]+" | sort -u || true
 }
 
+require_one_of() {
+  local value="$1"
+  local allowed="$2"
+  [[ " $allowed " == *" $value "* ]] || fail "invalid taxonomy value: $value"
+}
+
 require_pattern() {
   local value="$1"
   local prefix="$2"
@@ -75,7 +81,7 @@ validate_taxonomy() {
   project="$(printf '%s\n' "$projects" | sed -n '1p')"
   function="$(printf '%s\n' "$functions" | sed -n '1p')"
 
-  require_pattern "$project" "proj"
+  require_one_of "$project" "proj-core proj-practice proj-tools proj-research proj-web proj-data proj-media proj-reference proj-infra proj-archive"
   require_pattern "$function" "fn"
 
   while IFS= read -r topic; do
